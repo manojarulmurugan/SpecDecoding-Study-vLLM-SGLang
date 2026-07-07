@@ -38,6 +38,19 @@ serving a real workload (e.g., load Llama-3.1-8B, drive ~50 requests) for a fixe
 each GPU class you get, and read the compute-units delta before/after. That number is what
 actually gates how many H100/A100 hours are affordable across the 6 weeks.
 
+**Burn-rate calibration — first real data point (2026-07-07, Block-0 W4A16 session):**
+8 units for the resumed session (190 → 182) covering the two W4A16 server groups —
+checkpoint download, two ~3-min startups, ~14 min of timed measurement, plus overhead —
+roughly 40 min end-to-end, i.e. **~12 units/hr on A100**. Planning number until more data:
+**12 units/hr A100 → 500 units ≈ ~40 A100-hours total.** Consistent with the revised
+EXPERIMENT_MATRIX §2 estimate that the budget is tight, not comfortable.
+
+**Bonus observation:** Colab served an **A100-SXM4-80GB** (not the 40GB the plan assumed).
+More KV headroom and ~30% more memory bandwidth than a 40GB — good for the factorial, but
+(a) don't count on it every session, and (b) the GPU variant is recorded per-run in the
+result records (`env.gpu_name`); keep the core factorial on whichever A100 variant is
+actually obtainable *consistently*, and note the variant in any cross-run comparison.
+
 Source: [H100 is not selected · googlecolab/colabtools#5976](https://github.com/googlecolab/colabtools/issues/5976)
 
 ## Check 2 — vLLM KV-cache quantization support — CONFIRMED, no changes to locked decisions
@@ -223,6 +236,35 @@ Two further corrections found while wiring the reproduction configs:
    70B only). The 8B reference numbers for the gate are read from Figure 1(a) (A100):
    FP16+EAGLE 2.3×, W4A16 quant-only 2.1×, W4A16+EAGLE 1.3× relative. Recorded with
    provenance and tolerances in `configs/repro/reference_targets.yaml`.
+
+**Addendum (2026-07-07, found during the first Block-0 GPU run): the YudiZh W4A16 repo is
+NOT loadable by vLLM — correction 1 above is itself corrected.** The FP16 groups of the
+sweep completed fine; the W4A16 groups failed at weight load with
+`RuntimeError: start (0) + length (1792) exceeds dimension size (896)` on a row-parallel
+layer. Diagnosis, confirmed against SpecMQuant's own `model_convert/convert_w4a16.py`:
+`YudiZh/Meta-Llama-3-8B-Instruct-W4A16-g128` hosts the **post-conversion llamacu artifact**,
+not an AutoGPTQ checkpoint. Evidence (all three match the converter's output exactly):
+
+- weights file is `model_gptq.safetensors` — the converter's hardcoded output name;
+- keys are fused (`self_attn.qkv_proj.qweight`, `mlp.gate_up_proj.qweight`) and
+  `qzeros`/`g_idx` are absent — the converter fuses q/k/v and gate/up and keeps only
+  marlin-permuted `scales`;
+- qweight dim0 is `k/16` (down_proj: 14336/16 = 896) — the marlin tile repack
+  (`C.gptq_marlin_weight_repack`, `packed_data = zeros((shape_0//16, shape_1*16//8))`) —
+  where vLLM's GPTQ loader expects AutoGPTQ's `k/8` (= 1792). Hence 896-vs-1792.
+
+Un-converting (inverse marlin tile permutation + reconstructing dropped tensors) is
+checkpoint surgery with no validation path — rejected. **Substitute:
+`TechxGenus/Meta-Llama-3-8B-Instruct-GPTQ`** — a standard AutoGPTQ checkpoint, not gated,
+complete (model.safetensors + tokenizer + inlined `quantization_config`), and matching
+SpecMQuant's quantize recipe field-for-field where visible: bits=4, group_size=128,
+sym=true, desc_act=true, **damp_percent=0.01** (their exact value; the astronomer
+alternative uses 0.1). Calibration set unknown for both theirs and the substitute — one
+more reason the gate is direction-based, not magnitude-based. Consequence for the repro
+claim: "checkpoint-identical to SpecMQuant" now holds only for the **EAGLE draft head**
+(`yuhuili/EAGLE-LLaMA3-Instruct-8B`); the W4A16 target is recipe-matched, not
+artifact-identical. Configs updated (`configs/repro/repro_w4a16_*.yaml`); the debugging
+transcript is archived at `colab/archive_block0_debug_20260707.ipynb`.
 
 **One documented deviation from HARNESS_SPEC §5:** Block-0 load is driven by the harness's own
 streaming OpenAI-client driver (`harness/load.py`), not `vllm bench serve`, because the gate

@@ -1,0 +1,111 @@
++ vllm serve meta-llama/Meta-Llama-3-8B-Instruct --host 127.0.0.1 --port 8000 --dtype float16 --gpu-memory-utilization 0.8 --max-model-len 4096 --seed 1234 --no-enable-prefix-caching --speculative-config {"draft_tensor_parallel_size": 1, "method": "eagle", "model": "yuhuili/EAGLE-LLaMA3-Instruct-8B", "num_speculative_tokens": 5}
+(APIServer pid=14897) INFO 07-07 08:03:18 [api_utils.py:339] 
+(APIServer pid=14897) INFO 07-07 08:03:18 [api_utils.py:339]        █     █     █▄   ▄█
+(APIServer pid=14897) INFO 07-07 08:03:18 [api_utils.py:339]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.24.0
+(APIServer pid=14897) INFO 07-07 08:03:18 [api_utils.py:339]   █▄█▀ █     █     █     █  model   meta-llama/Meta-Llama-3-8B-Instruct
+(APIServer pid=14897) INFO 07-07 08:03:18 [api_utils.py:339]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=14897) INFO 07-07 08:03:18 [api_utils.py:339] 
+(APIServer pid=14897) INFO 07-07 08:03:18 [api_utils.py:273] non-default args: {'model_tag': 'meta-llama/Meta-Llama-3-8B-Instruct', 'host': '127.0.0.1', 'model': 'meta-llama/Meta-Llama-3-8B-Instruct', 'dtype': 'float16', 'seed': 1234, 'max_model_len': 4096, 'gpu_memory_utilization': 0.8, 'enable_prefix_caching': False, 'speculative_config': {'draft_tensor_parallel_size': 1, 'method': 'eagle', 'model': 'yuhuili/EAGLE-LLaMA3-Instruct-8B', 'num_speculative_tokens': 5}}
+(APIServer pid=14897) Traceback (most recent call last):
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 795, in hf_raise_for_status
+(APIServer pid=14897)     response.raise_for_status()
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+(APIServer pid=14897)     raise HTTPStatusError(message, request=request, response=self)
+(APIServer pid=14897) httpx.HTTPStatusError: Client error '401 Unauthorized' for url 'https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/resolve/main/config.json'
+(APIServer pid=14897) For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+(APIServer pid=14897) 
+(APIServer pid=14897) The above exception was the direct cause of the following exception:
+(APIServer pid=14897) 
+(APIServer pid=14897) Traceback (most recent call last):
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/transformers/utils/hub.py", line 437, in cached_files
+(APIServer pid=14897)     hf_hub_download(
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 88, in _inner_fn
+(APIServer pid=14897)     return fn(*args, **kwargs)
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1018, in hf_hub_download
+(APIServer pid=14897)     return _hf_hub_download_to_cache_dir(
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1170, in _hf_hub_download_to_cache_dir
+(APIServer pid=14897)     _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1869, in _raise_on_head_call_error
+(APIServer pid=14897)     raise head_call_error
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1712, in _get_metadata_or_catch_error
+(APIServer pid=14897)     metadata = get_hf_file_metadata(
+(APIServer pid=14897)                ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 88, in _inner_fn
+(APIServer pid=14897)     return fn(*args, **kwargs)
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1620, in get_hf_file_metadata
+(APIServer pid=14897)     response = _httpx_follow_relative_redirects_with_backoff(
+(APIServer pid=14897)                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 726, in _httpx_follow_relative_redirects_with_backoff
+(APIServer pid=14897)     hf_raise_for_status(response)
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 821, in hf_raise_for_status
+(APIServer pid=14897)     raise _format(GatedRepoError, message, response, repo_type=repo_type, repo_id=repo_id) from e
+(APIServer pid=14897) huggingface_hub.errors.GatedRepoError: 401 Client Error. (Request ID: Root=1-6a4cb2c6-4339d7be479b7ba6098322a3;6f37c9f0-a9b2-420c-a5ce-0af89278c544)
+(APIServer pid=14897) 
+(APIServer pid=14897) Cannot access gated repo for url https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/resolve/main/config.json.
+(APIServer pid=14897) Access to model meta-llama/Meta-Llama-3-8B-Instruct is restricted. You must have access to it and be authenticated to access it. Please log in.
+(APIServer pid=14897) 
+(APIServer pid=14897) The above exception was the direct cause of the following exception:
+(APIServer pid=14897) 
+(APIServer pid=14897) Traceback (most recent call last):
+(APIServer pid=14897)   File "/content/vllm_env/bin/vllm", line 6, in <module>
+(APIServer pid=14897)     sys.exit(main())
+(APIServer pid=14897)              ^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/entrypoints/cli/main.py", line 95, in main
+(APIServer pid=14897)     args.dispatch_function(args)
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/entrypoints/cli/serve.py", line 148, in cmd
+(APIServer pid=14897)     uvloop.run(run_server(args))
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/uvloop/__init__.py", line 96, in run
+(APIServer pid=14897)     return __asyncio.run(
+(APIServer pid=14897)            ^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/usr/lib/python3.12/asyncio/runners.py", line 195, in run
+(APIServer pid=14897)     return runner.run(main)
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+(APIServer pid=14897)     return self._loop.run_until_complete(task)
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/uvloop/__init__.py", line 48, in wrapper
+(APIServer pid=14897)     return await main
+(APIServer pid=14897)            ^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 663, in run_server
+(APIServer pid=14897)     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 677, in run_server_worker
+(APIServer pid=14897)     async with build_async_engine_client(
+(APIServer pid=14897)                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=14897)     return await anext(self.gen)
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 99, in build_async_engine_client
+(APIServer pid=14897)     async with build_async_engine_client_from_engine_args(
+(APIServer pid=14897)                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=14897)     return await anext(self.gen)
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 123, in build_async_engine_client_from_engine_args
+(APIServer pid=14897)     vllm_config = engine_args.create_engine_config(usage_context=usage_context)
+(APIServer pid=14897)                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/engine/arg_utils.py", line 1807, in create_engine_config
+(APIServer pid=14897)     maybe_override_with_speculators(
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/vllm/transformers_utils/config.py", line 624, in maybe_override_with_speculators
+(APIServer pid=14897)     config_dict, _ = PretrainedConfig.get_config_dict(
+(APIServer pid=14897)                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/transformers/configuration_utils.py", line 705, in get_config_dict
+(APIServer pid=14897)     config_dict, kwargs = cls._get_config_dict(pretrained_model_name_or_path, **kwargs)
+(APIServer pid=14897)                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/transformers/configuration_utils.py", line 760, in _get_config_dict
+(APIServer pid=14897)     resolved_config_file = cached_file(
+(APIServer pid=14897)                            ^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/transformers/utils/hub.py", line 293, in cached_file
+(APIServer pid=14897)     file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+(APIServer pid=14897)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=14897)   File "/content/vllm_env/lib/python3.12/site-packages/transformers/utils/hub.py", line 503, in cached_files
+(APIServer pid=14897)     raise OSError(
+(APIServer pid=14897) OSError: You are trying to access a gated repo.
+(APIServer pid=14897) Make sure to have access to it at https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct.
+(APIServer pid=14897) 401 Client Error. (Request ID: Root=1-6a4cb2c6-4339d7be479b7ba6098322a3;6f37c9f0-a9b2-420c-a5ce-0af89278c544)
+(APIServer pid=14897) 
+(APIServer pid=14897) Cannot access gated repo for url https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/resolve/main/config.json.
+(APIServer pid=14897) Access to model meta-llama/Meta-Llama-3-8B-Instruct is restricted. You must have access to it and be authenticated to access it. Please log in.

@@ -1,9 +1,15 @@
 # Block-0 reproduction-gate cell (EXPERIMENT_MATRIX.md block 0).
 # Matches SpecMQuant's protocol: Llama-3-8B-Instruct, greedy,
 # max_new_tokens=512, single-stream. See configs/repro/reference_targets.yaml.
+# NOTE on the checkpoint (2026-07-07): SpecMQuant's published artifact
+# (YudiZh/Meta-Llama-3-8B-Instruct-W4A16-g128) is their POST-CONVERSION
+# llamacu/Marlin format (fused qkv/gate_up keys, marlin-tile qweights,
+# dropped qzeros/g_idx) and cannot be loaded by vLLM. This substitute is a
+# standard AutoGPTQ checkpoint with the same recipe: bits=4, group_size=128,
+# sym=true, desc_act=true, damp=0.01. See PREREQ_RESULTS.md Check 3 addendum.
 block: repro
 engine: vllm
-model: YudiZh/Meta-Llama-3-8B-Instruct-W4A16-g128
+model: TechxGenus/Meta-Llama-3-8B-Instruct-GPTQ
 factors:
   weight_quant: w4a16
   kv_quant: fp16
@@ -12,7 +18,7 @@ draft_model: yuhuili/EAGLE-LLaMA3-Instruct-8B
 workload: humaneval
 workload_params:
   max_new_tokens: 512
-  tokenizer_model: YudiZh/Meta-Llama-3-8B-Instruct-W4A16-g128
+  tokenizer_model: TechxGenus/Meta-Llama-3-8B-Instruct-GPTQ
   run_correctness: true
 concurrency: 1
 decoding: greedy

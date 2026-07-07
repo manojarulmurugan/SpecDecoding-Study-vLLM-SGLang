@@ -83,7 +83,10 @@ def test_shipped_repro_configs_are_valid_and_consistent():
         assert cfg.decoding == "greedy"
         assert cfg.factors.kv_quant == "fp16", "Block 0 does not vary KV quant"
         if cfg.factors.weight_quant == "w4a16":
-            assert "W4A16" in cfg.model
+            # Standard AutoGPTQ checkpoint; the YudiZh artifact is
+            # SpecMQuant's converted llamacu/Marlin format and unloadable
+            # by vLLM (PREREQ_RESULTS Check 3 addendum, 2026-07-07).
+            assert cfg.model == "TechxGenus/Meta-Llama-3-8B-Instruct-GPTQ"
         else:
             assert cfg.model == "meta-llama/Meta-Llama-3-8B-Instruct"
         if cfg.factors.spec_decode == "eagle":

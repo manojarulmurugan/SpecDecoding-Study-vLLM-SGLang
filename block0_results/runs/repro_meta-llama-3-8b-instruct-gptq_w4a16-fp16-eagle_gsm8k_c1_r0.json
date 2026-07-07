@@ -1,0 +1,480 @@
+{
+  "config": {
+    "block": "repro",
+    "concurrency": 1,
+    "decoding": "greedy",
+    "draft_model": "yuhuili/EAGLE-LLaMA3-Instruct-8B",
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "extra": [],
+      "gpu_memory_utilization": 0.8,
+      "host": "127.0.0.1",
+      "max_model_len": 4096,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp16",
+      "spec_decode": "eagle",
+      "weight_quant": "w4a16"
+    },
+    "gpu_target": "a100",
+    "model": "TechxGenus/Meta-Llama-3-8B-Instruct-GPTQ",
+    "repeat_idx": 0,
+    "run_id": "repro_meta-llama-3-8b-instruct-gptq_w4a16-fp16-eagle_gsm8k_c1_r0",
+    "seed": 1234,
+    "warmup_requests": 3,
+    "workload": "gsm8k",
+    "workload_params": {
+      "max_new_tokens": 256,
+      "n_shot": 8,
+      "num_requests": 100
+    }
+  },
+  "env": {
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "7934c29bb55bd2e9a2e930834f35a9c0fe326eac",
+    "gpu_name": "NVIDIA A100-SXM4-80GB",
+    "timestamp_utc": "2026-07-07T09:25:42.830570+00:00"
+  },
+  "measured": {
+    "acceptance_rate": 0.29106423777564716,
+    "accepted_length_tau": 2.455321188878236,
+    "accuracy": 0.75,
+    "e2e_latency_ms": {
+      "mean": 1248.0358397300006,
+      "p50": 1245.4450534996795,
+      "p95": 1381.0839790998218,
+      "p99": 1520.1127346994144
+    },
+    "itl_ms": {
+      "mean": 11.224035852828925,
+      "p50": 11.214986000595673,
+      "p95": 11.547621500358218,
+      "p99": 11.757680500340939
+    },
+    "num_errors": 0,
+    "num_requests": 100,
+    "request_decode_tok_s_mean": 219.83775126392072,
+    "request_tok_s_mean": 206.08660325664584,
+    "spec_num_drafts": 10430.0,
+    "throughput_tok_s": 205.08844154092682,
+    "total_completion_tokens": 25600,
+    "ttft_ms": {
+      "mean": 77.36890027994377,
+      "p50": 78.36855099958484,
+      "p95": 82.30138910121241,
+      "p99": 84.80111192928234
+    },
+    "wall_time_s": 124.82419685700006
+  },
+  "run_id": "repro_meta-llama-3-8b-instruct-gptq_w4a16-fp16-eagle_gsm8k_c1_r0",
+  "score_details": [
+    {
+      "correct": true,
+      "pred": "694"
+    },
+    {
+      "correct": false,
+      "pred": "3835"
+    },
+    {
+      "correct": true,
+      "pred": "104"
+    },
+    {
+      "correct": true,
+      "pred": "35"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": false,
+      "pred": "27"
+    },
+    {
+      "correct": true,
+      "pred": "14"
+    },
+    {
+      "correct": false,
+      "pred": "266"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "17"
+    },
+    {
+      "correct": false,
+      "pred": "621"
+    },
+    {
+      "correct": true,
+      "pred": "15"
+    },
+    {
+      "correct": true,
+      "pred": "4"
+    },
+    {
+      "correct": false,
+      "pred": "168"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": false,
+      "pred": "833.33"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": false,
+      "pred": "208"
+    },
+    {
+      "correct": true,
+      "pred": "1400"
+    },
+    {
+      "correct": true,
+      "pred": "1210"
+    },
+    {
+      "correct": false,
+      "pred": "22"
+    },
+    {
+      "correct": true,
+      "pred": "30"
+    },
+    {
+      "correct": false,
+      "pred": "30"
+    },
+    {
+      "correct": false,
+      "pred": "115200"
+    },
+    {
+      "correct": false,
+      "pred": "9.00"
+    },
+    {
+      "correct": true,
+      "pred": "21"
+    },
+    {
+      "correct": true,
+      "pred": "280"
+    },
+    {
+      "correct": true,
+      "pred": "18"
+    },
+    {
+      "correct": true,
+      "pred": "16"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "370"
+    },
+    {
+      "correct": true,
+      "pred": "3200"
+    },
+    {
+      "correct": true,
+      "pred": "156"
+    },
+    {
+      "correct": true,
+      "pred": "310"
+    },
+    {
+      "correct": true,
+      "pred": "87"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": true,
+      "pred": "803"
+    },
+    {
+      "correct": false,
+      "pred": "30000"
+    },
+    {
+      "correct": true,
+      "pred": "98"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": false,
+      "pred": "1200"
+    },
+    {
+      "correct": true,
+      "pred": "110"
+    },
+    {
+      "correct": true,
+      "pred": "30"
+    },
+    {
+      "correct": false,
+      "pred": "1100"
+    },
+    {
+      "correct": true,
+      "pred": "160"
+    },
+    {
+      "correct": true,
+      "pred": "12"
+    },
+    {
+      "correct": false,
+      "pred": "7"
+    },
+    {
+      "correct": true,
+      "pred": "42"
+    },
+    {
+      "correct": true,
+      "pred": "312"
+    },
+    {
+      "correct": true,
+      "pred": "76"
+    },
+    {
+      "correct": true,
+      "pred": "160"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "168"
+    },
+    {
+      "correct": false,
+      "pred": "3600"
+    },
+    {
+      "correct": true,
+      "pred": "385000"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "112"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": true,
+      "pred": "123"
+    },
+    {
+      "correct": true,
+      "pred": "250"
+    },
+    {
+      "correct": false,
+      "pred": "2"
+    },
+    {
+      "correct": true,
+      "pred": "8"
+    },
+    {
+      "correct": false,
+      "pred": "43"
+    },
+    {
+      "correct": true,
+      "pred": "14"
+    },
+    {
+      "correct": true,
+      "pred": "42"
+    },
+    {
+      "correct": false,
+      "pred": "150"
+    },
+    {
+      "correct": true,
+      "pred": "34"
+    },
+    {
+      "correct": false,
+      "pred": "38"
+    },
+    {
+      "correct": true,
+      "pred": "200"
+    },
+    {
+      "correct": true,
+      "pred": "227"
+    },
+    {
+      "correct": true,
+      "pred": "5"
+    },
+    {
+      "correct": true,
+      "pred": "63"
+    },
+    {
+      "correct": true,
+      "pred": "15"
+    },
+    {
+      "correct": false,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "78"
+    },
+    {
+      "correct": true,
+      "pred": "138"
+    },
+    {
+      "correct": false,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "736"
+    },
+    {
+      "correct": true,
+      "pred": "2400"
+    },
+    {
+      "correct": true,
+      "pred": "320"
+    },
+    {
+      "correct": false,
+      "pred": "40"
+    },
+    {
+      "correct": true,
+      "pred": "26"
+    },
+    {
+      "correct": true,
+      "pred": "38"
+    },
+    {
+      "correct": true,
+      "pred": "1"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": false,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "280"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": true,
+      "pred": "225"
+    },
+    {
+      "correct": true,
+      "pred": "70"
+    },
+    {
+      "correct": true,
+      "pred": "235"
+    },
+    {
+      "correct": true,
+      "pred": "70"
+    }
+  ],
+  "status": "ok"
+}

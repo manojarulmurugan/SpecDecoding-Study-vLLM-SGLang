@@ -127,3 +127,35 @@ def test_sweep_external_url_rejects_multiple_groups(fake_server, gsm8k_questions
     with pytest.raises(ValueError, match="distinct server"):
         run_sweep([a, b], ResultsStore(tmp_path), server_url=fake_server.base_url,
                   log=lambda *_: None)
+
+
+def test_sweep_continues_past_failed_server_launch(
+    fake_server, gsm8k_questions_file, tmp_path, monkeypatch
+):
+    """A group whose server never becomes ready must fail its own runs,
+    tear down, and NOT sink later groups (the YudiZh-checkpoint scenario)."""
+    import harness.sweep as sweep_mod
+    from harness.engines.vllm_adapter import VllmAdapter
+
+    bad = _config(gsm8k_questions_file,
+                  model="broken/checkpoint-that-cannot-load")
+    good = _config(gsm8k_questions_file)
+    torn_down = []
+
+    class FlakyAdapter(VllmAdapter):
+        def launch(self, log_dir):
+            if self.config.model.startswith("broken/"):
+                raise RuntimeError("server exited before becoming ready")
+            return ServerHandle(process=None, base_url=fake_server.base_url,
+                                external=False)
+
+        def teardown(self, handle):
+            torn_down.append(handle)
+
+    monkeypatch.setattr(sweep_mod, "get_adapter", lambda engine: FlakyAdapter)
+    store = ResultsStore(tmp_path)
+    outcome = run_sweep([bad, good], store, log=lambda *_: None)
+    assert outcome["failed"] == [bad.run_id]
+    assert outcome["ok"] == [good.run_id]
+    assert len(torn_down) == 1  # good group's handle; bad group never launched
+    assert store.is_complete(good.run_id)

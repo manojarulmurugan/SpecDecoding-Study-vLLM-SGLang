@@ -12,9 +12,13 @@
 #   1. Figure 1 aggregates over their evaluation set (verify which dataset
 #      when writing anything up); our cells are per-workload.
 #   2. Their W4A16+EAGLE bar is believed to use the rotation variant
-#      (W4A16-g128-Rot + rotated EAGLE head); our repro uses the plain
-#      g128 checkpoint + stock EAGLE head (their commented-out "without
-#      rotation" configuration), because vLLM cannot reproduce the rotation.
+#      (W4A16-g128-Rot + rotated EAGLE head); our repro uses a plain g128
+#      checkpoint + stock EAGLE head (their commented-out "without rotation"
+#      configuration), because vLLM cannot reproduce the rotation. Further:
+#      their published W4A16 artifact is in converted llamacu/Marlin format
+#      vLLM cannot load, so the target is the recipe-matched
+#      TechxGenus/Meta-Llama-3-8B-Instruct-GPTQ (bits=4, g128, sym,
+#      desc_act, damp=0.01) — see PREREQ_RESULTS.md Check 3 addendum.
 #   3. Their engine is bespoke C/CUDA with tree drafting (depth 6, topk 10,
 #      tree size 60); vLLM V1 EAGLE is chain drafting. Expect lower tau and
 #      lower absolute speedups in vLLM.

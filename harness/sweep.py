@@ -68,14 +68,17 @@ def run_sweep(
                 log("[sweep]   would run: %s" % c.run_id)
             continue
 
-        if server_url:
-            handle = ServerHandle(process=None, base_url=server_url, external=True)
-        else:
-            handle = adapter.launch(Path(store.root) / "server_logs")
-            log("[sweep] waiting for server (log: %s)" % handle.log_path)
-            adapter.wait_ready(handle, log=log)
+        handle = None
+        attempted = set()
         try:
+            if server_url:
+                handle = ServerHandle(process=None, base_url=server_url, external=True)
+            else:
+                handle = adapter.launch(Path(store.root) / "server_logs")
+                log("[sweep] waiting for server (log: %s)" % handle.log_path)
+                adapter.wait_ready(handle, log=log)
             for cfg in pending:
+                attempted.add(cfg.run_id)
                 try:
                     record = execute_run(cfg, store, adapter, handle, log=log)
                     key = "ok" if record["status"] == "ok" else "failed"
@@ -83,8 +86,18 @@ def run_sweep(
                 except Exception:
                     log("[sweep] run %s FAILED:\n%s" % (cfg.run_id, traceback.format_exc()))
                     outcome["failed"].append(cfg.run_id)
+        except Exception:
+            # Server launch/readiness failure: fail this group's remaining
+            # runs and CONTINUE to the next group (one bad checkpoint must
+            # not sink the rest of the sweep).
+            log("[sweep] group FAILED before/at server readiness:\n%s"
+                % traceback.format_exc())
+            for cfg in pending:
+                if cfg.run_id not in attempted:
+                    outcome["failed"].append(cfg.run_id)
         finally:
-            adapter.teardown(handle)
+            if handle is not None:
+                adapter.teardown(handle)
 
     log(
         "[sweep] done: %d ok, %d skipped, %d failed"
