@@ -23,12 +23,21 @@ adapter, and MT-Bench.
   tokens/sec. Client-side completion tokens are exactly the kept tokens, so
   goodput = completion tokens / wall; `spec_rejected_tok_s` quantifies the
   rejected-draft waste from the counter deltas.
-- `configs/factorial/p2_*.yaml` (48 cells, written by
+- `configs/factorial/cube_*.yaml` — the FULL core-factorial board (written by
   `configs/factorial/generate_phase2.py` — edit the generator, not the files):
-  {baseline, W, K, S} × 3 workloads × concurrency {1,8,32,64}, with
-  num_requests scaled per concurrency (64/160/320/512, EXPERIMENT_MATRIX §2).
+  all 8 corners × 3 workloads × concurrency {1,8,32,64} × repeats {0,1,2}
+  = 288 cells, num_requests scaled per concurrency (64/160/320/512).
+  Sweep-time globs pick the subset to run; the marginals runbook selects the
+  four single-factor corners at repeat 0 (`cube_{base,w,k,s}_*_r0.yaml`, 48
+  cells). Repeats share a server launch (fixed seed; the request stream is
+  reshuffled per repeat via seed+repeat_idx in run.py).
 - `analysis/marginals.py` — the Phase-2 report: goodput vs concurrency per
   optimization, speedup vs baseline, emergent batch, tau.
+- `analysis/factorial.py` — the core 2^3 analysis in log space: main effects,
+  pairwise + three-way contrasts, and the interference gap (naive
+  product-in-logs vs measured full-stack gain), per workload × concurrency,
+  with min..max spread across complete repeats. Statistics verified against
+  synthetic cubes with known injected effects (`tests/test_factorial.py`).
 - Colab runbook: `colab/phase2_marginals.ipynb`.
 
 ## Layout

@@ -114,33 +114,53 @@ def test_subsample_tiles_when_oversampled(gsm8k_questions_file):
 
 # -- the Phase-2 config set ------------------------------------------------------
 
-def test_phase2_config_set_shape():
-    configs = load_configs(["configs/factorial/p2_*.yaml"])
-    assert len(configs) == 48
-    assert len({c.run_id for c in configs}) == 48
-    # exactly 4 server groups: baseline, W, K, S share launches across
-    # workloads and concurrencies
-    assert len(group_by_server(configs)) == 4
+def test_full_cube_config_board_shape():
+    configs = load_configs(["configs/factorial/cube_*.yaml"])
+    # 8 corners x 3 workloads x 4 concurrencies x 3 repeats
+    assert len(configs) == 288
+    assert len({c.run_id for c in configs}) == 288
+    # 8 server groups: repeats and workloads share a launch per corner
+    assert len(group_by_server(configs)) == 8
+    corners = set()
     for cfg in configs:
         assert cfg.block == "core_factorial"
         assert cfg.decoding == "greedy"
+        assert cfg.gpu_target == "a100", "GPU-confound correction: A100 only"
+        assert cfg.repeat_idx in (0, 1, 2)
+        assert cfg.seed == 1234, "repeats must share the server seed"
         n = cfg.workload_params["num_requests"]
         expected = {1: 64, 8: 160, 32: 320, 64: 512}[cfg.concurrency]
         assert n == expected, "num_requests must scale with concurrency"
-        # single-optimization marginals only: at most one factor on
+        f = cfg.factors
+        corners.add((f.weight_quant, f.kv_quant, f.spec_decode))
+        if f.spec_decode == "eagle3":
+            assert cfg.draft_model == "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B"
+        if f.weight_quant == "w4a16":
+            assert "AWQ" in cfg.model
+    assert len(corners) == 8, "all 8 corners of the 2^3 cube must be present"
+
+
+def test_marginal_runbook_globs_select_exactly_the_single_factor_corners():
+    globs = [
+        "configs/factorial/cube_base_*_r0.yaml",
+        "configs/factorial/cube_w_*_r0.yaml",
+        "configs/factorial/cube_k_*_r0.yaml",
+        "configs/factorial/cube_s_*_r0.yaml",
+    ]
+    configs = load_configs(globs)
+    assert len(configs) == 48
+    assert len(group_by_server(configs)) == 4
+    for cfg in configs:
         f = cfg.factors
         on = [f.weight_quant != "fp16", f.kv_quant != "fp16", f.spec_decode != "none"]
-        assert sum(on) <= 1
-        if cfg.factors.spec_decode == "eagle3":
-            assert cfg.draft_model == "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B"
-        if cfg.factors.weight_quant == "w4a16":
-            assert "AWQ" in cfg.model
+        assert sum(on) <= 1, "marginal globs must not catch interaction corners"
+        assert cfg.repeat_idx == 0
 
 
 def test_phase2_commands_build():
     import json as _json
 
-    configs = load_configs(["configs/factorial/p2_*.yaml"])
+    configs = load_configs(["configs/factorial/cube_*.yaml"])
     for cfg in configs:
         cmd = VllmAdapter(cfg).build_launch_command()
         if cfg.factors.kv_quant == "fp8":

@@ -45,6 +45,19 @@ roughly 40 min end-to-end, i.e. **~12 units/hr on A100**. Planning number until 
 **12 units/hr A100 → 500 units ≈ ~40 A100-hours total.** Consistent with the revised
 EXPERIMENT_MATRIX §2 estimate that the budget is tight, not comfortable.
 
+**Full config board sizing (2026-07-07, factorial build):** the complete core-factorial
+board is now generated: 8 corners × 3 workloads × 4 concurrencies × **3 repeats** = 288
+cells (repeats added per HARNESS_SPEC §9's revised uncertainty-reporting requirement).
+Estimated from Block-0 *measured* rates (~3.5 min average per single-stream cell, faster
+at higher concurrency): ≈ 25–40 min per corner-repeat × 24 corner-repeats ≈ **12–18
+A100-hours ≈ 145–215 units** at the calibrated ~12 units/hr — comfortably inside
+EXPERIMENT_MATRIX §2's 30–45 GPU-hour envelope (which also budgets dev/debug), and
+affordable within the remaining unit balance. The 3-repeat addition does NOT blow the
+budget because repeats share server launches (one launch per corner, not per repeat).
+Which subset runs first is a sweep-time glob selection (see
+`configs/factorial/generate_phase2.py` docstring), not a config decision; kill levers
+(trim repeats at extreme concurrencies first) remain available if sessions run short.
+
 **Bonus observation:** Colab served an **A100-SXM4-80GB** (not the 40GB the plan assumed).
 More KV headroom and ~30% more memory bandwidth than a 40GB — good for the factorial, but
 (a) don't count on it every session, and (b) the GPU variant is recorded per-run in the

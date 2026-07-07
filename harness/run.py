@@ -33,7 +33,12 @@ def execute_run(
     handle: ServerHandle,
     log=print,
 ) -> Dict[str, Any]:
-    workload = get_workload(config.workload)(config.workload_params, seed=config.seed)
+    # Repeats re-measure the same cell under a reshuffled request stream:
+    # the workload seed folds in repeat_idx, while config.seed alone feeds
+    # the server launch so repeats share one server group.
+    workload = get_workload(config.workload)(
+        config.workload_params, seed=config.seed + config.repeat_idx
+    )
     items = workload.build()
     log(
         "[run] %s: %d prompts, concurrency=%d, max_new_tokens=%d"
