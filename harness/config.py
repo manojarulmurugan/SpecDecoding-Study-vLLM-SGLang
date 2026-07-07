@@ -74,6 +74,8 @@ class RunConfig:
     repeat_idx: int = 0
     warmup_requests: int = 3
     gpu_target: str = "a100"
+    # Poll interval for the emergent-batch-size sampler (PROJECT_SPEC §7.2).
+    batch_sample_interval_s: float = 1.0
     engine_args: EngineArgs = field(default_factory=EngineArgs)
     run_id: Optional[str] = None
 
@@ -133,6 +135,8 @@ class RunConfig:
             raise ConfigError("draft_model set but spec_decode=none")
         if self.concurrency < 1:
             raise ConfigError("concurrency must be >= 1")
+        if self.batch_sample_interval_s <= 0:
+            raise ConfigError("batch_sample_interval_s must be > 0")
         if not self.model:
             raise ConfigError("model is required")
 

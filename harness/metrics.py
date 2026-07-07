@@ -116,10 +116,25 @@ def summarize_ms(values_s: Sequence[float]) -> Optional[Dict[str, float]]:
     }
 
 
+def summarize_batch_samples(samples: Sequence[float]) -> Optional[Dict[str, float]]:
+    """Summary of sampled running-batch sizes (PROJECT_SPEC §7.2: batch size
+    is MEASURED, never set)."""
+    values = [v for v in samples if v is not None]
+    if not values:
+        return None
+    return {
+        "mean": sum(values) / len(values),
+        "p50": percentile(values, 50),
+        "max": max(values),
+        "num_samples": len(values),
+    }
+
+
 def aggregate_run(
     request_results: Iterable[Any],
     wall_time_s: float,
     spec_stats: Optional[Dict[str, float]] = None,
+    batch_samples: Optional[Sequence[float]] = None,
 ) -> Dict[str, Any]:
     """Build the ``measured`` block of a result record (HARNESS_SPEC.md §4).
 
@@ -127,9 +142,16 @@ def aggregate_run(
     tests can pass simple namespaces).
 
     Notes on definitions:
-    - throughput_tok_s: total completion tokens / wall time of the timed
-      window. With spec decoding, completion tokens are already only the
-      *kept* tokens, so under greedy decoding this equals goodput.
+    - goodput_tok_s (TurboSpec / LITERATURE §7): verified-and-generated
+      tokens per second, excluding rejected speculative tokens. Client-side
+      completion tokens are exactly the tokens the target model kept
+      (rejected drafts never reach the API), so goodput = total completion
+      tokens / wall time. In no-spec cells this trivially equals throughput.
+    - throughput_tok_s: kept for continuity with Block-0 records; same
+      client-side basis, so numerically equal to goodput_tok_s. The
+      distinction that matters is against *engine-side* token rates, which
+      count rejected draft work; spec_rejected_tok_s below quantifies that
+      waste from the counter deltas.
     - request_tok_s_mean: mean per-request completion tokens/sec over each
       request's full lifetime (send -> last token). This is the closest
       analog of SpecMQuant's per-question "generate_speed" and is the
@@ -167,17 +189,25 @@ def aggregate_run(
         "itl_ms": summarize_ms(itl_all),
         "e2e_latency_ms": summarize_ms([r.e2e_s for r in ok]),
         "throughput_tok_s": (completion_tokens / wall_time_s) if wall_time_s else None,
+        "goodput_tok_s": (completion_tokens / wall_time_s) if wall_time_s else None,
         "request_tok_s_mean": _mean(per_request_speed),
         "request_decode_tok_s_mean": _mean(per_request_decode_speed),
+        "emergent_batch_size": summarize_batch_samples(batch_samples or []),
         "accepted_length_tau": None,
         "acceptance_rate": None,
         "spec_num_drafts": None,
+        "spec_rejected_tok_s": None,
         "accuracy": None,  # filled by the caller after correctness scoring
     }
     if spec_stats:
         measured["accepted_length_tau"] = spec_stats.get("accepted_length_tau")
         measured["acceptance_rate"] = spec_stats.get("acceptance_rate")
         measured["spec_num_drafts"] = spec_stats.get("num_drafts")
+        rejected = (spec_stats.get("num_draft_tokens") or 0) - (
+            spec_stats.get("num_accepted_tokens") or 0
+        )
+        if wall_time_s:
+            measured["spec_rejected_tok_s"] = rejected / wall_time_s
     return measured
 
 

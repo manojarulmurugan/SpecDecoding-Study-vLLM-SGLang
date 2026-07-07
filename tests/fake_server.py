@@ -38,6 +38,8 @@ class FakeVllmServer:
         self.accepted_tokens_per_request = accepted_tokens_per_request
 
         self.request_count = 0
+        self.in_flight = 0
+        self.max_in_flight_seen = 0
         self.seen_payloads: List[dict] = []
         self._lock = threading.Lock()
         self._httpd: Optional[ThreadingHTTPServer] = None
@@ -71,29 +73,37 @@ class FakeVllmServer:
                 payload = json.loads(self.rfile.read(length) or b"{}")
                 with server._lock:
                     server.request_count += 1
+                    server.in_flight += 1
+                    server.max_in_flight_seen = max(
+                        server.max_in_flight_seen, server.in_flight
+                    )
                     server.seen_payloads.append(payload)
-                self.send_response(200)
-                self.send_header("Content-Type", "text/event-stream")
-                self.end_headers()
-                words = server.completion_text.split(" ")
-                chunks = [w if i == 0 else " " + w for i, w in enumerate(words)]
-                for i, text in enumerate(chunks):
-                    chunk = {
-                        "choices": [{
-                            "text": text,
-                            "index": 0,
-                            "finish_reason": "stop" if i == len(chunks) - 1 else None,
-                        }],
-                    }
-                    self._sse(chunk)
-                    time.sleep(server.chunk_delay_s)
-                usage_tokens = len(chunks) * 2  # 2 tokens/chunk: spec-decode-like
-                self._sse({
-                    "choices": [],
-                    "usage": {"prompt_tokens": 11, "completion_tokens": usage_tokens},
-                })
-                self.wfile.write(b"data: [DONE]\n\n")
-                self.wfile.flush()
+                try:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.end_headers()
+                    words = server.completion_text.split(" ")
+                    chunks = [w if i == 0 else " " + w for i, w in enumerate(words)]
+                    for i, text in enumerate(chunks):
+                        chunk = {
+                            "choices": [{
+                                "text": text,
+                                "index": 0,
+                                "finish_reason": "stop" if i == len(chunks) - 1 else None,
+                            }],
+                        }
+                        self._sse(chunk)
+                        time.sleep(server.chunk_delay_s)
+                    usage_tokens = len(chunks) * 2  # 2 tokens/chunk: spec-decode-like
+                    self._sse({
+                        "choices": [],
+                        "usage": {"prompt_tokens": 11, "completion_tokens": usage_tokens},
+                    })
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                finally:
+                    with server._lock:
+                        server.in_flight -= 1
 
             def _sse(self, obj):
                 self.wfile.write(b"data: " + json.dumps(obj).encode() + b"\n\n")
@@ -129,6 +139,7 @@ class FakeVllmServer:
         lines = [
             "# HELP vllm:request_success_total requests",
             'vllm:request_success_total{model_name="fake"} %d' % self.request_count,
+            'vllm:num_requests_running{model_name="fake"} %d' % self.in_flight,
         ]
         if self.spec_metrics:
             n = self.request_count

@@ -1,9 +1,35 @@
-# Harness quickstart (Phase 0–1 scope)
+# Harness quickstart (Phase 0–2 scope)
 
-Implements HARNESS_SPEC.md for the Block-0 reproduction gate: config schema,
-atomic/resumable result store, vLLM adapter, closed-loop load driver, GSM8K +
-HumanEval workloads, and the gate analysis. Serving-sweep workloads (RAG,
-MT-Bench), the SGLang adapter, and `analysis/factorial.py` land in Phase 2+.
+Implements HARNESS_SPEC.md through Phase 2: config schema, atomic/resumable
+result store, vLLM adapter, closed-loop load driver, GSM8K + HumanEval +
+RAG-shared-prefix workloads, emergent-batch-size sampling, goodput, the
+Block-0 gate analysis, and the Phase-2 marginals analysis. Still to come
+(Phase 3+): the remaining factorial corners' analysis (`analysis/factorial.py`
+with log-space interaction contrasts), repeats/spread reporting, the SGLang
+adapter, and MT-Bench.
+
+## Phase-2 additions
+
+- `harness/workloads/rag_shared_prefix.py` — byte-identical shared prefixes
+  (system → document → question, fixed order), `prefix_overlap` knob
+  (low/mid/high → 1/8/32 questions per document), sources: Spec-Bench `rag`
+  subtask / JSONL / synthetic clean-room docs. `check_shared_prefix_token_ids`
+  is the token-ID-equality guard; `scripts/check_rag_prefix.py` runs it with
+  the real tokenizer before a sweep.
+- `harness/sampling.py` — polls `vllm:num_requests_running` during the timed
+  window; `measured.emergent_batch_size` = {mean, p50, max, num_samples}.
+  Concurrency is SET, batch size is MEASURED (PROJECT_SPEC §7.2).
+- `measured.goodput_tok_s` — TurboSpec goodput: verified-and-generated
+  tokens/sec. Client-side completion tokens are exactly the kept tokens, so
+  goodput = completion tokens / wall; `spec_rejected_tok_s` quantifies the
+  rejected-draft waste from the counter deltas.
+- `configs/factorial/p2_*.yaml` (48 cells, written by
+  `configs/factorial/generate_phase2.py` — edit the generator, not the files):
+  {baseline, W, K, S} × 3 workloads × concurrency {1,8,32,64}, with
+  num_requests scaled per concurrency (64/160/320/512, EXPERIMENT_MATRIX §2).
+- `analysis/marginals.py` — the Phase-2 report: goodput vs concurrency per
+  optimization, speedup vs baseline, emergent batch, tau.
+- Colab runbook: `colab/phase2_marginals.ipynb`.
 
 ## Layout
 

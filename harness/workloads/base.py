@@ -48,12 +48,24 @@ class Workload(ABC):
         return self.params.get("stop")
 
     def subsample(self, records: List[Any]) -> List[Any]:
-        """Deterministic subset selection: seeded sample, original order kept
-        so runs with different num_requests share their common prefix of the
-        dataset ordering decision."""
+        """Deterministic selection of exactly num_requests records.
+
+        - subset: seeded sample, original order kept, so runs with different
+          num_requests share their ordering decision.
+        - oversample (num_requests > dataset size, e.g. HumanEval's 164 at a
+          concurrency-scaled 320): tile the dataset deterministically. This
+          is standard for serving load generation; prefix caching is off in
+          controlled cells, so repeats aren't served from cache.
+        """
         n = self.params.get("num_requests")
-        if not n or n >= len(records):
+        if not n:
             return records
-        rng = random.Random(self.seed)
-        picked = sorted(rng.sample(range(len(records)), int(n)))
-        return [records[i] for i in picked]
+        n = int(n)
+        if n == len(records):
+            return records
+        if n < len(records):
+            rng = random.Random(self.seed)
+            picked = sorted(rng.sample(range(len(records)), n))
+            return [records[i] for i in picked]
+        tiled = records * ((n + len(records) - 1) // len(records))
+        return tiled[:n]

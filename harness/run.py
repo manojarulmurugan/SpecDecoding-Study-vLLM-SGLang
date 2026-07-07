@@ -22,6 +22,7 @@ from .env_info import collect_env
 from .load import run_closed_loop
 from .metrics import aggregate_run, spec_decode_stats
 from .results import ResultsStore
+from .sampling import BatchSizeSampler
 from .workloads import get_workload
 
 
@@ -56,6 +57,9 @@ def execute_run(
         )
 
     metrics_before = adapter.scrape_metrics(handle)
+    sampler = BatchSizeSampler(
+        handle.base_url, interval_s=config.batch_sample_interval_s
+    ).start()
     load_result = run_closed_loop(
         handle.base_url, config.model,
         [item.prompt for item in items],
@@ -66,6 +70,7 @@ def execute_run(
         seed=config.seed,
         log=log,
     )
+    batch_samples = sampler.stop()
     metrics_after = adapter.scrape_metrics(handle)
 
     spec_stats = None
@@ -75,7 +80,10 @@ def execute_run(
             log("[run] WARNING: spec decoding on but no spec_decode counters "
                 "found at /metrics -- tau will be null")
 
-    measured = aggregate_run(load_result.results, load_result.wall_time_s, spec_stats)
+    measured = aggregate_run(
+        load_result.results, load_result.wall_time_s, spec_stats,
+        batch_samples=batch_samples,
+    )
 
     outputs = [r.text for r in sorted(load_result.results, key=lambda r: r.index)]
     score = score_run(workload, items, outputs)

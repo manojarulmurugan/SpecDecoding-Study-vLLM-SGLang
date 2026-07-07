@@ -18,6 +18,32 @@ beyond these files plus the cited papers/repos. Read in this order:
 
 ---
 
+## Status (2026-07-07)
+
+**Phase 0 (prerequisites) and Phase 1 (harness + reproduction gate) are complete.** See
+`PREREQ_RESULTS.md` for the full prerequisite findings and `block0_results/repro_gate_report.md`
+for the gate output. Headline result:
+
+**Block 0 reproduction gate: PASS.** EAGLE's relative speedup over the FP16 baseline dropped
+from 1.64×→1.26× (GSM8K) and 1.89×→1.37× (HumanEval) once the target model went 4-bit —
+reproducing SpecMQuant's (ACL 2025) core finding that weight quantization erodes speculative
+decoding's benefit, in vLLM (a production continuous-batching engine) rather than their bespoke
+single-stream C/CUDA harness. Accepted length (τ) was essentially unchanged (2.49→2.46,
+2.83→2.64), confirming the mechanism is economic (fixed spec-decode overhead against
+cheaper-per-step decode), not a drop in draft-head accuracy.
+
+A few things were corrected from the original spec along the way — the GPU routing that would
+have confounded the KV-quant factor with hardware, the reproduction checkpoint (SpecMQuant's 8B
+W4A16 is GPTQ, not AWQ), the vLLM version needed for FP8-KV and speculative decoding to coexist
+(pinned to `vllm==0.24.0`), and the SGLang seam's original hypothesis (dropped a
+quality-propagation claim that doesn't survive scrutiny, replaced with a cache-capacity framing).
+Full detail in `PREREQ_RESULTS.md`; the numbers below already reflect the corrected state.
+
+**Next up:** Phase 2 (serving baseline + single-optimization marginals) — see
+`IMPLEMENTATION_PLAN.md`.
+
+---
+
 ## What this project is (and is not)
 
 It **is**: a reproduce-then-extend empirical/integrative study. The contribution is a
@@ -46,46 +72,41 @@ This project tests who is right inside vLLM, under continuous batching, across c
 
 ---
 
-## PREREQUISITE CHECKS — run these in Phase 0 BEFORE committing to the full matrix
+## PREREQUISITE CHECKS — status: complete, see PREREQ_RESULTS.md
 
-Each of these can reshape the experiment matrix. Do not skip. Record results in
-`docs/PREREQ_RESULTS.md` (create it) so decisions are traceable.
+All five checks below have been run; full findings, corrections, and provenance are in
+`PREREQ_RESULTS.md` (repo root, not `docs/`). Summary per check, kept here for navigation only —
+**PREREQ_RESULTS.md is the source of truth, not this section.**
 
-### Check 1 — Colab GPU availability and unit burn rate
-- Confirm which GPUs the two Colab Pro accounts actually serve (A100 40GB, H100, L4).
-- Budget is **~550 compute units total across two accounts**. After the first H100 session,
-  read the usage meter to calibrate units/hour for A100 vs H100 vs L4. H100 burns fastest.
-- Decision gated: how many native-FP8 (H100) hours are affordable. See EXPERIMENT_MATRIX
-  "Compute allocation."
+### Check 1 — Colab GPU availability and unit burn rate — DONE
+Confirmed 500 units total across two accounts (200 + 300, not the originally-assumed ~550).
+A100 confirmed working; H100 is selectable in Colab's UI but unreliable in practice (silently
+falls back to a lesser GPU). Measured burn rate: **~12 units/hr on A100 → ~40 A100-hours total
+budget.** Treat H100 as opportunistic bonus only, never a planned dependency.
 
-### Check 2 — vLLM KV-cache quantization support for the target model
-- Confirm which KV-cache quant precisions the pinned vLLM version supports for
-  Llama-3.1-8B-Instruct. FP8 (E4M3) is the primary target. INT8 KV support was an open
-  feature request as of Jan 2026 — verify current status.
-- **CRITICAL:** FP8 KV is native only on H100+ (SM9.0+). On A100 (SM8.0) it is software-
-  emulated with a ~10–20% penalty. This is why FP8-KV cells run on H100 (see matrix).
-- Decision gated: whether FP8-KV cells must run on H100, and whether INT8-KV becomes an
-  optional axis.
+### Check 2 — vLLM KV-cache quantization support for the target model — DONE
+FP8 (E4M3) KV-cache confirmed mature and working. INT8 KV-cache remains unshipped in stable
+vLLM. **Routing correction:** the original plan split FP8-KV cells to H100 and FP16-KV cells to
+A100 — this would have confounded the KV-quant factor with hardware. The entire core factorial
+now runs on A100 (FP8 software-emulated there, ~10–20% penalty, itself a documented finding);
+H100 native-FP8 is an optional separate validation block only, never part of core routing.
 
-### Check 3 — EAGLE-3 draft checkpoint for the target model
-- Confirm a public EAGLE-3 draft head exists for Llama-3.1-8B-Instruct (check SafeAILab/EAGLE
-  and the vLLM-supported spec-decode model list).
-- For the reproduction gate (Block 0), confirm an **EAGLE-2** head for **Llama-3-8B** exists
-  (SpecMQuant used EAGLE-2 on Llama-3-8B).
-- Decision gated: if no EAGLE-3 head for 3.1-8B, fall back to EAGLE-2, or a draft-model pair,
-  or n-gram speculation — and document the substitution.
+### Check 3 — EAGLE checkpoint availability — DONE
+EAGLE-3 confirmed for the anchor model (`yuhuili/EAGLE3-LLaMA3.1-Instruct-8B`); EAGLE-1/2-style
+checkpoint confirmed for the reproduction gate (`yuhuili/EAGLE-LLaMA3-Instruct-8B`, verified
+identical to SpecMQuant's own). **Resolved: the vLLM config value is `method: "eagle"`, not
+`"eagle2"` — no such method string exists in vLLM** (EAGLE-2 is a drafting-tree algorithm, not a
+different checkpoint/config format).
 
-### Check 4 — GCS GPU quota (overflow only)
-- New GCP projects do NOT have GPU quota by default; a quota-increase request can take time.
-- Request it NOW even though GCS is the overflow valve, so it is ready if needed.
-- GCS is used only when: a run outlasts a reliable Colab session, H100 units run short, or for
-  the (out-of-scope) TensorRT-LLM stretch. **Vertex AI is avoided.**
+### Check 4 — GCS GPU quota (overflow only) — account upgraded, quota request still pending
+Account confirmed upgraded to paid billing with a payment method attached. Recommendation:
+request 1x A100 quota (more reliably schedulable than H100) as the actual overflow path. This is
+the one remaining open action item — everything else in this list is done.
 
-### Check 5 — Reproduction-harness availability
-- Clone Spec-Bench (`github.com/hemingkx/Spec-Bench`) — the harness backbone.
-- Clone SpecMQuant (`github.com/AI9Stars/SpecMQuant`) — shows exactly how quantization was
-  wired into a Spec-Bench-derived harness. You ADAPT this; you do not write the harness from
-  scratch. This is the single biggest de-risking factor in the project.
+### Check 5 — Reproduction-harness availability — DONE, with a correction
+Both Spec-Bench and SpecMQuant cloned and inspected. **Correction:** SpecMQuant is bespoke
+C/CUDA, not a vLLM harness — only its evaluation/scoring code and reference numbers carry over
+directly; the vLLM engine-launch/quant-wiring was built against vLLM's own docs instead.
 
 ---
 
@@ -93,18 +114,18 @@ Each of these can reshape the experiment matrix. Do not skip. Record results in
 
 | Decision | Value |
 |---|---|
-| Primary serving engine | vLLM |
-| Scoped second engine | SGLang — RAG shared-prefix regime ONLY |
+| Primary serving engine | vLLM, **pinned `engine_version: vllm==0.24.0`** (Check 6: confirmed to run W4A16+FP8-KV+EAGLE-3 together; older 0.10.1 confirmed broken for this combination) |
+| Scoped second engine | SGLang — RAG shared-prefix regime ONLY (seam hypothesis reframed to cache-capacity/crossover, not quality-propagation — see EXPERIMENT_MATRIX §5) |
 | Out of scope | TensorRT-LLM (stretch only, GCS VM), custom kernels |
 | Anchor model | meta-llama/Llama-3.1-8B-Instruct |
-| Reproduction-gate model | Llama-3-8B (to match SpecMQuant) |
-| Weight quant (primary) | W4A16 (AWQ) |
+| Reproduction-gate model | Llama-3-8B (to match SpecMQuant; W4A16 cell uses their exact GPTQ checkpoint, not AWQ) |
+| Weight quant (primary) | W4A16 — vLLM `quantization=awq_marlin` (not plain `awq`) for the anchor model |
 | Weight quant (optional) | W8A8, W4A8 if time permits |
-| KV-cache quant (primary) | FP8 (E4M3), native on H100 |
-| Speculative decoding | EAGLE-3 (EAGLE-2 for the reproduction gate) |
-| Harness backbone | Spec-Bench, quant-wiring adapted from SpecMQuant repo |
-| Serving load driver | vLLM `benchmark_serving.py` (request-rate control) |
-| Compute | Colab Pro (A100 + H100 + L4, ~550 units), GCS overflow, no Vertex |
+| KV-cache quant (primary) | FP8 (E4M3) — **entire core factorial runs on A100** (emulated FP8, ~10–20% penalty, a documented finding); H100 native-FP8 is bonus-only, never core routing (avoids confounding K with hardware) |
+| Speculative decoding | EAGLE-3 (`method: eagle3`); EAGLE-1/2-style checkpoint for the reproduction gate uses `method: eagle` — there is no `eagle2` method string |
+| Harness backbone | Spec-Bench + SpecMQuant's evaluation/scoring code only (SpecMQuant itself is bespoke C/CUDA, not a vLLM harness — its quant-wiring does not carry over) |
+| Serving load driver | `vllm bench serve` (superseded `benchmark_serving.py`) for Phase 2+; Block 0 uses the harness's own streaming driver since the gate needs generated text for correctness scoring |
+| Compute | Colab Pro (confirmed 500 units, ~12 units/hr on A100 ≈ 40 A100-hours), GCS paid overflow (account upgraded), no Vertex |
 
 ---
 
