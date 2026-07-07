@@ -1,0 +1,5 @@
+# Local (GPU-less) development: run the test suite and dry-run sweeps.
+# GPU-side pins live in colab/block0_repro_gate.ipynb (vllm==0.24.0 recipe).
+pyyaml>=6.0
+requests>=2.28
+pytest>=7.0

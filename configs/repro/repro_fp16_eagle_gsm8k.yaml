@@ -1,0 +1,29 @@
+# Block-0 reproduction-gate cell (EXPERIMENT_MATRIX.md block 0).
+# Matches SpecMQuant's protocol: Llama-3-8B-Instruct, greedy,
+# max_new_tokens=256, single-stream. See configs/repro/reference_targets.yaml.
+block: repro
+engine: vllm
+model: meta-llama/Meta-Llama-3-8B-Instruct
+factors:
+  weight_quant: fp16
+  kv_quant: fp16
+  spec_decode: eagle
+draft_model: yuhuili/EAGLE-LLaMA3-Instruct-8B
+workload: gsm8k
+workload_params:
+  num_requests: 100
+  max_new_tokens: 256
+  n_shot: 8
+concurrency: 1
+decoding: greedy
+seed: 1234
+repeat_idx: 0
+warmup_requests: 3
+gpu_target: a100
+engine_args:
+  port: 8000
+  dtype: float16
+  gpu_memory_utilization: 0.8
+  max_model_len: 4096
+  enable_prefix_caching: false
+  num_speculative_tokens: 5

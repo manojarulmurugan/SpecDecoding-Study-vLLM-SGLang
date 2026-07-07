@@ -58,17 +58,34 @@ inference-stack-study/
 run_id: factorial_w1k1s1_rag_c32_r2        # unique, deterministic from fields below
 block: core_factorial                       # repro | serving_baseline | core_factorial | sglang_seam | optional
 engine: vllm                                # vllm | sglang
-engine_version: "<PINNED>"                  # recorded, not assumed
+engine_version: "vllm==0.24.0"              # PINNED — confirmed via PREREQ_RESULTS Check 6 to
+                                             # run the full w4a16+fp8-kv+eagle3 stack; do not
+                                             # substitute an older version (0.10.1 confirmed
+                                             # broken: kv-cache-dtype forces V0, which rejects
+                                             # speculative decoding entirely)
 model: meta-llama/Llama-3.1-8B-Instruct     # Llama-3-8B for repro block
 factors:
   weight_quant: w4a16                       # fp16 | w4a16 | w8a8 | w4a8
-  kv_quant: fp8                             # fp16 | fp8 | int8
+                                             # w4a16 -> vLLM quantization="awq_marlin", NOT "awq"
+                                             # (plain awq works but is unoptimized; awq_marlin is
+                                             # the confirmed-tested config, Check 6)
+  kv_quant: fp8                             # fp16 | fp8 | int8 (int8 unshipped in vLLM, Check 2)
+                                             # fp8 -> vLLM kv_cache_dtype="fp8"; vLLM itself warns
+                                             # this "may cause accuracy drop without a proper
+                                             # scaling factor" — decide calibration explicitly,
+                                             # don't silently rely on defaults
   spec_decode: eagle3                       # none | eagle3 | eagle2
+enable_prefix_caching: true                 # EXPLICIT, always recorded — vLLM defaults this on
+                                             # (v0.6.0+); for RAG cells this is a real factor in
+                                             # the vLLM-vs-SGLang comparison (hash-block APC vs
+                                             # radix-tree), not a hypothetical to ignore
 draft_model: "<EAGLE3 head id>"             # null if spec_decode=none
 workload: rag_shared_prefix                 # gsm8k | humaneval | rag_shared_prefix | mt_bench
 workload_params:
   prefix_overlap: high                      # low | mid | high  (RAG only)
-  num_requests: 200
+  num_requests: 200                         # SCALE with concurrency, don't fix — see
+                                             # EXPERIMENT_MATRIX §2 (roughly 60-80 at conc=1,
+                                             # 400+ at conc=64, targeting >=2-3 min steady state)
   input_len_mode: natural                   # fixed | natural
   output_len_cap: 512
 concurrency: 32                             # SET. batch size is MEASURED.
@@ -76,7 +93,10 @@ decoding: greedy                            # greedy (controlled) | sampling (cr
 seed: 1234
 repeat_idx: 2
 warmup_requests: 16
-gpu_target: h100                            # a100 | h100 | l4   (FP8 cells → h100)
+gpu_target: a100                            # a100 (primary, all core factorial cells) | h100
+                                             # (bonus native-FP8 validation subset only, Block 4b
+                                             # — never mixed into core routing, see
+                                             # EXPERIMENT_MATRIX §3/§6) | l4 (dev/debug only)
 ```
 
 `run_id` must be deterministic from the fields so reruns overwrite cleanly and resume logic can
@@ -126,11 +146,17 @@ class EngineAdapter(ABC):
     # metric collection is shared via benchmark_serving-style driving in load.py
 ```
 
-- **vLLM adapter:** launch with weight-quant (AWQ), `--kv-cache-dtype fp8`, speculative config
-  (EAGLE-3 draft + max draft len), and the `--disable-spec-on-high-load` style guard left OFF
-  for controlled cells (we WANT to observe erosion). Drive load with `benchmark_serving.py`.
+- **vLLM adapter:** launch with `quantization=awq_marlin` (not plain `awq` — confirmed via
+  PREREQ_RESULTS Check 6 as the tested, optimized config), `kv_cache_dtype=fp8`,
+  `speculative_config` (EAGLE-3 draft + `num_speculative_tokens`), and the
+  `--disable-spec-on-high-load` style guard left OFF for controlled cells (we WANT to observe
+  erosion). Drive load with **`vllm bench serve`** (the CLI that superseded
+  `benchmark_serving.py` — verify feature parity against the pinned 0.24.0 version before relying
+  on it for closed-loop concurrency control). Pin `engine_version: vllm==0.24.0` everywhere.
 - **SGLang adapter:** launch with `--quantization` (weights) + KV-quant flag + EAGLE spec; same
-  load driver; additionally collect radix-tree cache hit rate.
+  load driver; additionally collect radix-tree cache hit rate. Record `enable_prefix_caching`
+  explicitly for the vLLM side of every RAG comparison cell (vLLM defaults APC on since v0.6.0) —
+  the seam is APC-hash-block-vs-radix-tree, not sharing-vs-no-sharing (EXPERIMENT_MATRIX §5).
 
 **Amortize server startup:** `sweep.py` groups runs by config (the 8 factorial configs), launches
 the server once per config, and drives all workload × concurrency × repeat cells against it before
@@ -144,6 +170,9 @@ teardown. Only ~8 launches for the core factorial.
   (closed-loop) or a Poisson arrival process at rate λ (open-loop). Prefer closed-loop
   concurrency {1,8,32,64} for the controlled factorial; optionally add an open-loop λ sweep for
   the realistic cross-check.
+- **Scale `num_requests` with concurrency — never fix it.** A fixed count is wrong at both ends:
+  too slow at conc=1 (sequential), too few batch "waves" to reach steady state at conc=64. See
+  EXPERIMENT_MATRIX §2 for the scaling guidance and worked example.
 - **Record the emergent batch size** by sampling the engine's running-batch metric during the
   run. NEVER set batch size directly. This is non-negotiable (PROJECT_SPEC §7.2).
 - Discard `warmup_requests` before timing (engine warmup, CUDA graph capture).
@@ -189,9 +218,21 @@ crossover sweep.
 
 - `factorial.py`: from the 8-corner results compute the 3 main effects, 3 pairwise interactions,
   and the 3-way interaction (standard 2³ effect estimates), **per workload and per concurrency
-  level** — so concurrency-dependence of each interaction is explicit.
-- Key derived quantity: **interference gap** = (naive product/sum of individual wins) − (measured
-  combined win). Positive gap = sub-additive interference; ~0 = clean compounding.
+  level** — so concurrency-dependence of each interaction is explicit. Note this means ~12
+  mini-factorials (3 workloads × 4 concurrencies), not one — the pre-stated hypothesis directions
+  (EXPERIMENT_MATRIX §5) are your protection against cherry-picking sign flips across them; cite
+  them as such in the write-up.
+- **Define "clean compounding" on the right scale: multiplicative, so analyze in log space.**
+  "Clean compounding" is a multiplicative claim (savings multiply, not add), so compute effects
+  on log(goodput) / log(latency); the three-way interaction contrast **in log space** is the
+  actual test of clean compounding. **Interference gap** = naive product of individual-optimization
+  wins (in log space: sum of individual log-effects) minus the measured combined win (the actual
+  three-way log-effect). Positive gap = sub-additive interference; ~0 = clean compounding. Pin
+  this definition — don't waffle between multiplicative and additive framings.
+- **Report uncertainty, not point estimates alone.** With `repeat_idx` up to 3, show the spread
+  across repeats on every effect estimate at minimum; bootstrap over requests within a run is
+  better if time allows. An effect reported without spread is unfalsifiable — "we found an
+  interaction" needs a stated uncertainty to mean anything.
 - `plots.py`: (a) per-engine/per-config goodput-vs-concurrency curves with the speedup=1.0 line;
   (b) stacked-savings bars per workload with the interference gap shaded; (c) the K×S and W×S
   interaction plots vs concurrency (the headline cells); (d) SGLang overlap-crossover plot.
@@ -206,5 +247,12 @@ crossover sweep.
   same-document batch).
 - Unit test: result-record schema validation + atomic-write/resume correctness.
 - Smoke test: a 1-config × 1-workload × conc=1 × 1-repeat end-to-end run on the smallest GPU
-  before launching any sweep.
-- Sanity: `accepted_length_tau` ≥ 1 and `verif_to_decode_ratio` finite whenever spec is on.
+  before launching any sweep. (The full-stack version of this — w4a16+fp8-kv+eagle3 together —
+  was run and confirmed working on A100/vLLM 0.24.0; see PREREQ_RESULTS Check 6.)
+- **Free correctness regression test:** speculative decoding under greedy decoding is
+  output-preserving by construction — at concurrency=1, a spec-on cell's output must match its
+  spec-off counterpart (up to numerics). Assert this in CI/harness tests; a mismatch means the
+  adapter is broken, independent of anything about the SpecMQuant reproduction gate.
+- Sanity: `accepted_length_tau` ≥ 1 and `verif_to_decode_ratio` finite whenever spec is on. Since
+  vLLM does not expose `verif_to_decode_ratio` natively, derive it (from τ, acceptance counters,
+  and ITL deltas between matched spec-on/spec-off cells) rather than expecting it as a raw field.

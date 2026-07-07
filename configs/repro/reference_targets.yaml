@@ -1,0 +1,38 @@
+# Reference numbers for the Block-0 reproduction gate.
+#
+# PROVENANCE (read before editing -- PROJECT_SPEC.md §7.3 "no fabricated
+# baselines"): SpecMQuant (arXiv 2505.22179) does NOT tabulate per-benchmark
+# wall-clock speedups for Llama-3-8B; its per-task tables cover the 70B
+# model. The 8B numbers below are read from Figure 1(a) ("Llama-3-8B (A100)",
+# also figs/overall_speedup.png in the cloned repo, external/SpecMQuant):
+#   - FP16 + EAGLE-2:  2.3x relative speedup over FP16 baseline
+#   - W4A16-g128 quant-only: 2.1x over FP16 baseline
+#   - W4A16 + EAGLE-2: 1.3x relative speedup over the W4A16 baseline
+# Caveats to keep in mind when comparing:
+#   1. Figure 1 aggregates over their evaluation set (verify which dataset
+#      when writing anything up); our cells are per-workload.
+#   2. Their W4A16+EAGLE bar is believed to use the rotation variant
+#      (W4A16-g128-Rot + rotated EAGLE head); our repro uses the plain
+#      g128 checkpoint + stock EAGLE head (their commented-out "without
+#      rotation" configuration), because vLLM cannot reproduce the rotation.
+#   3. Their engine is bespoke C/CUDA with tree drafting (depth 6, topk 10,
+#      tree size 60); vLLM V1 EAGLE is chain drafting. Expect lower tau and
+#      lower absolute speedups in vLLM.
+# For all three reasons the gate FAILS only on direction, and treats
+# magnitude gaps as warnings to document (LITERATURE.md §8 tolerance,
+# loosened for the cross-engine comparison).
+
+reference:
+  fp16_eagle_rel_speedup: 2.3
+  w4a16_eagle_rel_speedup: 1.3
+  w4a16_quant_only_speedup: 2.1
+
+gate:
+  # EAGLE must actually help at FP16 single-stream...
+  min_fp16_rel_speedup: 1.2
+  # ...and W4A16 must erode the EAGLE benefit by at least this relative
+  # margin (reference erosion is 1 - 1.3/2.3 = 43%; 15% is a lenient floor).
+  min_relative_erosion: 0.15
+  # Magnitude deviations beyond this fraction of the reference produce
+  # warnings (cross-engine comparison; see provenance caveats above).
+  magnitude_rel_tolerance: 0.30
