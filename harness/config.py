@@ -29,7 +29,11 @@ VALID_KV_QUANT = {"fp16", "fp8"}  # int8 KV not shipped in vLLM (PREREQ_RESULTS 
 VALID_SPEC_DECODE = {"none", "eagle", "eagle3", "ngram"}
 VALID_WORKLOADS = {"gsm8k", "humaneval", "rag_shared_prefix", "mt_bench"}
 VALID_DECODING = {"greedy", "sampling"}
-VALID_GPU_TARGETS = {"a100", "h100", "l4", "t4", "any"}
+# a100_40gb / a100_80gb: Colab's High-RAM toggle pins the A100 variant
+# (confirmed empirically 2026-07-09; PREREQ_RESULTS Check 1). Cube cells must
+# match Phase 2's 80GB card; k_stress targets 40GB where both KV ceilings
+# fit in a small concurrency grid.
+VALID_GPU_TARGETS = {"a100", "a100_40gb", "a100_80gb", "h100", "l4", "t4", "any"}
 
 
 class ConfigError(ValueError):

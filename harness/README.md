@@ -46,7 +46,12 @@ Phase 2's flat K marginal is a regime-specific null: demand peaked at ~18% of
 the KV pool. `configs/k_stress/` (16 cells, written by
 `generate_k_stress.py`) recreates K's capacity channel: unique ~7.4k-token
 documents (`doc_target_tokens` sizing in the RAG workload, overlap low),
-{FP16-KV, FP8-KV} × conc {32,48,64,96} × 2 repeats, FP16 weights, no spec.
+{FP16-KV, FP8-KV} × conc {8,16,32,48} × 2 repeats, FP16 weights, no spec —
+on a **pinned A100-40GB** (Colab High-RAM OFF; the toggle selects the
+variant, PREREQ_RESULTS Check 1), where both ceilings (~16 FP16 / ~32 FP8)
+fit inside the grid. Cube/factorial sessions pin High-RAM ON (80GB) to match
+Phase 2's records; `analysis/factorial.py` warns on mixed-hardware cubes.
+Runbook: `colab/phase3b_kstress_40gb.ipynb`.
 `harness/sampling.py` now samples queue depth and `vllm:kv_cache_usage_perc`
 alongside the running batch, and run.py deltas `vllm:num_preemptions` — the
 three signals that make "the ceiling was hit" a measurement instead of an

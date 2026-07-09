@@ -74,9 +74,24 @@ Phase-2 session covers more diverse cell shapes (4 launch groups, 3 workloads, f
 concurrency sweep) than Block-0's single-stream-only calibration did. Remaining balance as of
 this session: **153.88 units** (this account only — check the other account separately).
 
+**A100 variant is PINNABLE, not luck (user-confirmed empirically, 2026-07-09):** Colab's
+**High-RAM runtime toggle controls the A100 variant directly** — OFF = A100-SXM4-40GB,
+ON = A100-SXM4-80GB. This supersedes the "bonus observation" framing below. Routing
+consequences, applied to the runbooks:
+- **Cube/factorial sessions (phase3_factorial.ipynb): High-RAM ON, always.** Phase 2's
+  marginal corners were measured on the 80GB card; a cube mixing 40GB and 80GB records is
+  confounded exactly like the rejected H100/A100 split. The notebook asserts ≥70GB and
+  `analysis/factorial.py` emits a MIXED HARDWARE warning if a cube ever mixes
+  `env.gpu_name` values.
+- **K-stress addendum (phase3b_kstress_40gb.ipynb): High-RAM OFF, deliberately.** On the
+  40GB card both KV ceilings (~16 FP16-KV / ~32 FP8-KV at 7.7k-token contexts) fit inside
+  a {8,16,32,48} concurrency grid, so FP8's own plateau is measurable — the 80GB design
+  could only show FP16 plateauing (~47) while FP8 "keeps tracking" (its ~94 ceiling
+  escapes any sane grid).
+
 Check 1 status: **DONE.** Burn rate calibrated from two independent real sessions
-(Block-0 single-stream, Phase-2 full concurrency sweep); H100 unreliability and A100-80GB
-variance both documented above.
+(Block-0 single-stream, Phase-2 full concurrency sweep); H100 unreliability documented;
+A100 variant selection resolved (High-RAM toggle, above).
 
 Source: [H100 is not selected · googlecolab/colabtools#5976](https://github.com/googlecolab/colabtools/issues/5976)
 

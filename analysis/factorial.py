@@ -127,6 +127,30 @@ def collect(
     return {k: dict(v) for k, v in out.items()}
 
 
+def collect_gpu_names(
+    records: List[Dict[str, Any]]
+) -> Dict[Tuple[str, int], List[str]]:
+    """GPU variants contributing to each (workload, concurrency) cube.
+
+    A cube mixing A100-40GB and A100-80GB records is confounded the same way
+    the rejected H100/A100 routing was -- the effects would measure
+    'optimization + hardware'. Colab's High-RAM toggle pins the variant
+    (PREREQ_RESULTS Check 1), so a mixed cube is an execution mistake worth
+    failing loudly on, not a caveat.
+    """
+    seen: Dict[Tuple[str, int], set] = defaultdict(set)
+    for rec in records:
+        cfg = rec.get("config", {})
+        if cfg.get("block") not in ("core_factorial", "serving_baseline"):
+            continue
+        if rec.get("status") != "ok":
+            continue
+        name = (rec.get("env") or {}).get("gpu_name")
+        if name:
+            seen[(cfg["workload"], int(cfg["concurrency"]))].add(name)
+    return {k: sorted(v) for k, v in seen.items()}
+
+
 def analyze_cell(
     cube: Dict[Corner, Dict[int, float]]
 ) -> Optional[Dict[str, Any]]:
@@ -179,9 +203,24 @@ def _fmt_effect(value: float, spread: Optional[Tuple[float, float]]) -> str:
 
 
 def render_report(
-    cells: Dict[Tuple[str, int], Optional[Dict[str, Any]]], metric: str
+    cells: Dict[Tuple[str, int], Optional[Dict[str, Any]]],
+    metric: str,
+    gpu_names: Optional[Dict[Tuple[str, int], List[str]]] = None,
 ) -> str:
     lines = ["# Core 2^3 factorial: log-space effects on %s" % metric, ""]
+    mixed = {
+        k: names for k, names in (gpu_names or {}).items() if len(names) > 1
+    }
+    if mixed:
+        lines.append("## WARNING: MIXED HARDWARE INSIDE CUBES (confounded!)")
+        lines.append(
+            "These cubes mix GPU variants; their effects measure "
+            "'optimization + hardware'. Re-run the minority-card cells on "
+            "the majority card (High-RAM toggle) before trusting them:"
+        )
+        for (workload, conc), names in sorted(mixed.items()):
+            lines.append("- %s @ conc=%d: %s" % (workload, conc, ", ".join(names)))
+        lines.append("")
     lines.append(
         "Effect columns: log-effect (multiplicative factor) "
         "[min..max across complete repeats]; '~0?' = spread straddles zero. "
@@ -239,9 +278,10 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     store = ResultsStore(args.results_dir)
-    data = collect(store.load_all(), metric=args.metric)
+    records = store.load_all()
+    data = collect(records, metric=args.metric)
     cells = {key: analyze_cell(cube) for key, cube in data.items()}
-    report = render_report(cells, args.metric)
+    report = render_report(cells, args.metric, gpu_names=collect_gpu_names(records))
     print(report)
     out = args.out or str(Path(args.results_dir) / "factorial_report.md")
     Path(out).write_text(report)

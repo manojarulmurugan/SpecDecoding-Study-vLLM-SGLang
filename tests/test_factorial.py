@@ -219,3 +219,23 @@ def test_cli_end_to_end(tmp_path):
     assert "Interference gap" in report
     assert (tmp_path / "results" / "factorial_effects.json").exists()
     assert factorial_main([str(tmp_path / "empty")]) == 1
+
+
+def test_mixed_hardware_inside_cube_warns():
+    from analysis.factorial import collect_gpu_names
+
+    records = full_cube_records()
+    for i, rec in enumerate(records):
+        rec["env"] = {"gpu_name": "NVIDIA A100-SXM4-80GB"}
+    records[3]["env"]["gpu_name"] = "NVIDIA A100-SXM4-40GB"  # one stray cell
+    gpu_names = collect_gpu_names(records)
+    assert gpu_names[("gsm8k", 8)] == [
+        "NVIDIA A100-SXM4-40GB", "NVIDIA A100-SXM4-80GB"]
+    report = render_report({("gsm8k", 8): None}, "goodput_tok_s",
+                           gpu_names=gpu_names)
+    assert "MIXED HARDWARE" in report
+    # uniform hardware: no warning
+    records[3]["env"]["gpu_name"] = "NVIDIA A100-SXM4-80GB"
+    report = render_report({("gsm8k", 8): None}, "goodput_tok_s",
+                           gpu_names=collect_gpu_names(records))
+    assert "MIXED HARDWARE" not in report

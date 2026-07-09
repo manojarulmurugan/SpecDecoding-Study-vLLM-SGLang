@@ -122,8 +122,11 @@ def test_k_stress_config_set():
         assert cfg.workload_params["doc_target_tokens"] == 7400
         assert cfg.workload_params["request_timeout_s"] == 1800
         assert cfg.repeat_idx in (0, 1)
+        # pinned 40GB card (High-RAM OFF): both KV ceilings (~16 fp16, ~32
+        # fp8) sit inside this grid -- see the generator docstring
+        assert cfg.gpu_target == "a100_40gb"
         n = cfg.workload_params["num_requests"]
-        assert n == {32: 160, 48: 192, 64: 256, 96: 320}[cfg.concurrency]
+        assert n == {8: 64, 16: 96, 32: 160, 48: 192}[cfg.concurrency]
         cmd = VllmAdapter(cfg).build_launch_command()
         if cfg.factors.kv_quant == "fp8":
             assert cmd[cmd.index("--kv-cache-dtype") + 1] == "fp8"
@@ -171,36 +174,36 @@ def _ks_record(conc, kv, goodput, batch_mean, kv_usage_max, preemptions,
 
 
 def _divergence_records():
+    # 40GB-card story: fp16 ceiling ~16, fp8 ceiling ~32
     records = []
     for r in (0, 1):
-        # conc 32: both fit; conc 64: fp16 plateaus at ~46 and thrashes
         records += [
-            _ks_record(32, "fp16", 1500, 31.0, 0.55, 0, repeat=r),
-            _ks_record(32, "fp8", 1480, 31.5, 0.28, 0, repeat=r),
-            _ks_record(64, "fp16", 1400, 46.0, 1.0, 220, repeat=r),
-            _ks_record(64, "fp8", 2300, 62.0, 0.52, 0, repeat=r),
+            _ks_record(8, "fp16", 700, 7.8, 0.42, 0, repeat=r),
+            _ks_record(8, "fp8", 680, 7.9, 0.21, 0, repeat=r),
+            _ks_record(32, "fp16", 900, 16.0, 1.0, 180, repeat=r),
+            _ks_record(32, "fp8", 1480, 31.5, 0.95, 0, repeat=r),
         ]
     return records
 
 
 def test_k_stress_report_shows_divergence():
     cells = ks_collect(_divergence_records())
-    report = render_report(cells, pool_tokens=360000)
-    assert "1.64x" in report                      # 2300/1400 at conc 64
-    assert "conc 64: FP16-KV CAPACITY-LIMITED" in report
-    assert "conc 32: FP16-KV not capacity-limited" in report
-    # predicted plateau: 360000 / (7600 + 250) = ~46
-    assert "~46 concurrent requests" in report
+    report = render_report(cells, pool_tokens=125000)
+    assert "1.64x" in report                      # 1480/900 at conc 32
+    assert "conc 32: FP16-KV CAPACITY-LIMITED" in report
+    assert "conc 8: FP16-KV not capacity-limited" in report
+    # predicted plateau: 125000 / (7600 + 250) = ~16
+    assert "~16 concurrent requests" in report
 
 
 def test_k_stress_report_missing_cells_and_cli(tmp_path):
-    records = _divergence_records()[:3]  # drop fp8 at conc 64
+    records = _divergence_records()[:3]  # drop fp8 at conc 32
     report = render_report(ks_collect(records))
     assert "Missing cells" in report
 
     store = ResultsStore(tmp_path / "results")
     for rec in _divergence_records():
         store.write(rec)
-    assert ks_main([str(tmp_path / "results"), "--pool-tokens", "360000"]) == 0
+    assert ks_main([str(tmp_path / "results"), "--pool-tokens", "125000"]) == 0
     assert (tmp_path / "results" / "k_stress_report.md").exists()
     assert ks_main([str(tmp_path / "empty")]) == 1
