@@ -57,10 +57,12 @@ independently across workloads and concurrency — publishable on its own.
 
 ## Phase 3 — The core 2³ factorial + interaction analysis (Week 4)  ← CORE CONTRIBUTION
 
-Run the remaining factorial corners (the pairwise and three-way combinations) across the sweep.
-Route FP8-KV cells to H100 (native FP8); FP16-KV cells to A100/L4. Then run `analysis/factorial.py`
-to compute main effects, pairwise (focus: W×S and K×S), the three-way, and the **interference
-gap**, each as a function of concurrency.
+Run the remaining factorial corners (the pairwise and three-way combinations: WK, WS, KS, WKS)
+across the sweep. **All cells run on A100** (EXPERIMENT_MATRIX §3/§6 correction: splitting
+FP8-KV to H100 and FP16-KV to A100 confounds the K factor with hardware; H100 is opportunistic
+bonus validation only, never core routing). Then run `analysis/factorial.py` to compute main
+effects, pairwise (focus: W×S and K×S), the three-way, and the **interference gap** — all in log
+space, each as a function of concurrency, with spread across repeats reported per HARNESS_SPEC §9.
 
 **Checkpoint / ship state:** the full interaction matrix answering compound-vs-interfere — the
 project's headline result, complete and defensible. **This is minimum success** (with Phases 0–2).

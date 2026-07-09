@@ -14,7 +14,10 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-VALID_BLOCKS = {"repro", "serving_baseline", "core_factorial", "sglang_seam", "optional"}
+VALID_BLOCKS = {
+    "repro", "serving_baseline", "core_factorial", "k_stress",
+    "sglang_seam", "optional",
+}
 VALID_ENGINES = {"vllm", "sglang"}
 VALID_WEIGHT_QUANT = {"fp16", "w4a16", "w8a8", "w4a8"}
 VALID_KV_QUANT = {"fp16", "fp8"}  # int8 KV not shipped in vLLM (PREREQ_RESULTS Check 2)

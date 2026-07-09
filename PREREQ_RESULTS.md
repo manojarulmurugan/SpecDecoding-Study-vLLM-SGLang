@@ -6,7 +6,7 @@ research and by cloning the two reference repos into `external/`.
 
 ---
 
-## Check 1 — Colab GPU availability and unit burn rate — PARTIALLY DONE (2026-07-03)
+## Check 1 — Colab GPU availability and unit burn rate — DONE (updated 2026-07-08)
 
 **Units confirmed:** 200 on account 1, 300 on account 2 → **500 total**, slightly under the
 ~550 the plan assumed. Not a blocker, but leaves less slack — burn rate discipline matters more
@@ -63,6 +63,20 @@ More KV headroom and ~30% more memory bandwidth than a 40GB — good for the fac
 (a) don't count on it every session, and (b) the GPU variant is recorded per-run in the
 result records (`env.gpu_name`); keep the core factorial on whichever A100 variant is
 actually obtainable *consistently*, and note the variant in any cross-run comparison.
+
+**Phase-2 marginals session, real data (2026-07-08):** 48/48 cells `status: ok`, zero
+failures. Units burned: 165.61 → 153.88 = **11.73 units for the full 48-cell run** (4 server
+groups, all four singles across 3 workloads × 4 concurrencies) — well under the notebook's
+own 30–45 unit estimate. This single data point suggests the 145–215 unit estimate for the
+full 288-cell board (line 53 above) is conservative; worth letting Fable recompute the
+Phase-3 budget against this real number rather than the Block-0-only extrapolation, since the
+Phase-2 session covers more diverse cell shapes (4 launch groups, 3 workloads, full
+concurrency sweep) than Block-0's single-stream-only calibration did. Remaining balance as of
+this session: **153.88 units** (this account only — check the other account separately).
+
+Check 1 status: **DONE.** Burn rate calibrated from two independent real sessions
+(Block-0 single-stream, Phase-2 full concurrency sweep); H100 unreliability and A100-80GB
+variance both documented above.
 
 Source: [H100 is not selected · googlecolab/colabtools#5976](https://github.com/googlecolab/colabtools/issues/5976)
 

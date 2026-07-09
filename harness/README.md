@@ -40,6 +40,20 @@ adapter, and MT-Bench.
   synthetic cubes with known injected effects (`tests/test_factorial.py`).
 - Colab runbook: `colab/phase2_marginals.ipynb`.
 
+## K-stress addendum (Phase-3 Session D)
+
+Phase 2's flat K marginal is a regime-specific null: demand peaked at ~18% of
+the KV pool. `configs/k_stress/` (16 cells, written by
+`generate_k_stress.py`) recreates K's capacity channel: unique ~7.4k-token
+documents (`doc_target_tokens` sizing in the RAG workload, overlap low),
+{FP16-KV, FP8-KV} × conc {32,48,64,96} × 2 repeats, FP16 weights, no spec.
+`harness/sampling.py` now samples queue depth and `vllm:kv_cache_usage_perc`
+alongside the running batch, and run.py deltas `vllm:num_preemptions` — the
+three signals that make "the ceiling was hit" a measurement instead of an
+inference. Analysis: `analysis/k_stress.py` (goodput ratio, plateau vs
+predicted pool/context, capacity-limited verdicts). Records carry
+`block: k_stress` so the factorial/marginals analyses ignore them.
+
 ## Layout
 
 - `harness/config.py` — one YAML = one run cell; deterministic `run_id`;

@@ -14,7 +14,7 @@ from harness.engines.vllm_adapter import VllmAdapter
 from harness.metrics import aggregate_run, summarize_batch_samples
 from harness.results import ResultsStore
 from harness.run import execute_run
-from harness.sampling import BatchSizeSampler
+from harness.sampling import MetricsSampler
 from harness.sweep import group_by_server
 from tests.conftest import make_config
 
@@ -25,23 +25,28 @@ def test_sampler_observes_in_flight_requests(fake_server):
     fake_server.chunk_delay_s = 0.03
     from harness.load import run_closed_loop
 
-    sampler = BatchSizeSampler(fake_server.base_url, interval_s=0.01).start()
+    sampler = MetricsSampler(fake_server.base_url, interval_s=0.01).start()
     run_closed_loop(
         fake_server.base_url, "m", ["p%d" % i for i in range(12)],
         concurrency=4, max_tokens=8, progress_every=0,
     )
     samples = sampler.stop()
-    assert len(samples) >= 3
-    assert max(samples) >= 2, "sampler never saw concurrent in-flight requests"
-    assert max(samples) <= 4
+    running = samples["running"]
+    assert len(running) >= 3
+    assert max(running) >= 2, "sampler never saw concurrent in-flight requests"
+    assert max(running) <= 4
     assert fake_server.max_in_flight_seen >= 2
+    # capacity gauges sampled alongside (fake: kv usage = 0.1 * in-flight)
+    assert samples["kv_cache_usage"]
+    assert max(samples["kv_cache_usage"]) <= 0.4 + 1e-9
+    assert samples["waiting"] == [0] * len(samples["waiting"])
 
 
 def test_sampler_survives_dead_endpoint():
-    sampler = BatchSizeSampler("http://127.0.0.1:9", interval_s=0.01,
-                               timeout_s=0.2).start()
+    sampler = MetricsSampler("http://127.0.0.1:9", interval_s=0.01,
+                             timeout_s=0.2).start()
     time.sleep(0.05)
-    assert sampler.stop() == []
+    assert all(v == [] for v in sampler.stop().values())
 
 
 def test_summarize_batch_samples():
@@ -215,3 +220,38 @@ def test_marginals_collect_and_render():
 
 def test_marginals_cli_no_data(tmp_path):
     assert marginals_main([str(tmp_path / "empty")]) == 1
+
+
+def test_phase3_session_globs():
+    """The Phase-3 runbook's three sweep selections must partition cleanly."""
+    session_a = load_configs([
+        "configs/factorial/cube_ws_*_r0.yaml",
+        "configs/factorial/cube_ks_*_r0.yaml",
+        "configs/factorial/cube_wks_*_r0.yaml",
+        "configs/factorial/cube_wk_*_r0.yaml",
+    ])
+    assert len(session_a) == 48
+    assert len(group_by_server(session_a)) == 4
+    for cfg in session_a:
+        f = cfg.factors
+        on = [f.weight_quant != "fp16", f.kv_quant != "fp16", f.spec_decode != "none"]
+        assert sum(on) >= 2, "session A is interaction corners only"
+        assert cfg.repeat_idx == 0
+    # session-A order follows glob order: ws corners come first
+    first = session_a[0].factors
+    assert (first.weight_quant, first.kv_quant, first.spec_decode) == (
+        "w4a16", "fp16", "eagle3")
+
+    session_b = load_configs(["configs/factorial/cube_*_r1.yaml"])
+    session_c = load_configs(["configs/factorial/cube_*_r2.yaml"])
+    for session in (session_b, session_c):
+        assert len(session) == 96
+        assert len(group_by_server(session)) == 8
+    # A + B + C + the Phase-2 marginal set = the full 288-cell board
+    marginals = load_configs([
+        "configs/factorial/cube_base_*_r0.yaml", "configs/factorial/cube_w_*_r0.yaml",
+        "configs/factorial/cube_k_*_r0.yaml", "configs/factorial/cube_s_*_r0.yaml",
+    ])
+    all_ids = {c.run_id for c in session_a + session_b + session_c + marginals}
+    board = load_configs(["configs/factorial/cube_*.yaml"])
+    assert all_ids == {c.run_id for c in board}

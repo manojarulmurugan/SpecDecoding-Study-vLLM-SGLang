@@ -185,6 +185,9 @@ def aggregate_run(
         "num_errors": len(errors),
         "wall_time_s": wall_time_s,
         "total_completion_tokens": completion_tokens,
+        "prompt_tokens_mean": _mean(
+            [getattr(r, "prompt_tokens", None) for r in ok]
+        ),
         "ttft_ms": summarize_ms([r.ttft_s for r in ok]),
         "itl_ms": summarize_ms(itl_all),
         "e2e_latency_ms": summarize_ms([r.e2e_s for r in ok]),

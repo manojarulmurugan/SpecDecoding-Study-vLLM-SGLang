@@ -19,10 +19,15 @@ from .correctness import score_run
 from .engines import get_adapter
 from .engines.base import EngineAdapter, ServerHandle
 from .env_info import collect_env
-from .load import run_closed_loop
-from .metrics import aggregate_run, spec_decode_stats
+from .load import DEFAULT_REQUEST_TIMEOUT_S, run_closed_loop
+from .metrics import (
+    aggregate_run,
+    metric_value,
+    spec_decode_stats,
+    summarize_batch_samples,
+)
 from .results import ResultsStore
-from .sampling import BatchSizeSampler
+from .sampling import PREEMPTIONS_COUNTER, MetricsSampler
 from .workloads import get_workload
 
 
@@ -48,6 +53,11 @@ def execute_run(
     # Warmup happens inside run_closed_loop; scrape counters after it would
     # be ideal, but warmup uses the same code path, so scrape happens in two
     # steps: warmup first, then metrics, then the timed window.
+    # Stress cells (long queues by design) can push per-request lifetimes
+    # past the default client timeout; configurable per cell.
+    timeout_s = float(
+        config.workload_params.get("request_timeout_s", DEFAULT_REQUEST_TIMEOUT_S)
+    )
     if config.warmup_requests:
         run_closed_loop(
             handle.base_url, config.model,
@@ -57,12 +67,13 @@ def execute_run(
             temperature=config.temperature(),
             stop=workload.stop(),
             seed=config.seed,
+            timeout_s=timeout_s,
             progress_every=0,
             log=log,
         )
 
     metrics_before = adapter.scrape_metrics(handle)
-    sampler = BatchSizeSampler(
+    sampler = MetricsSampler(
         handle.base_url, interval_s=config.batch_sample_interval_s
     ).start()
     load_result = run_closed_loop(
@@ -73,9 +84,11 @@ def execute_run(
         temperature=config.temperature(),
         stop=workload.stop(),
         seed=config.seed,
+        timeout_s=timeout_s,
         log=log,
     )
-    batch_samples = sampler.stop()
+    gauge_samples = sampler.stop()
+    batch_samples = gauge_samples.get("running", [])
     metrics_after = adapter.scrape_metrics(handle)
 
     spec_stats = None
@@ -88,6 +101,19 @@ def execute_run(
     measured = aggregate_run(
         load_result.results, load_result.wall_time_s, spec_stats,
         batch_samples=batch_samples,
+    )
+    # Capacity-pressure signals (K-stress addendum; null-safe everywhere):
+    # queue depth, KV-pool saturation, and the preemption counter delta.
+    measured["queue_depth"] = summarize_batch_samples(
+        gauge_samples.get("waiting", [])
+    )
+    measured["kv_cache_usage"] = summarize_batch_samples(
+        gauge_samples.get("kv_cache_usage", [])
+    )
+    preempt_after = metric_value(metrics_after, PREEMPTIONS_COUNTER)
+    measured["num_preemptions"] = (
+        preempt_after - (metric_value(metrics_before, PREEMPTIONS_COUNTER) or 0.0)
+        if preempt_after is not None else None
     )
 
     outputs = [r.text for r in sorted(load_result.results, key=lambda r: r.index)]

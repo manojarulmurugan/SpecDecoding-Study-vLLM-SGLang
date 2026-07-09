@@ -200,6 +200,34 @@ class RagSharedPrefixWorkload(Workload):
             for doc in synthetic_documents(n_docs)
         ]
 
+    def _size_docs(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Grow each document to ~params["doc_target_tokens"] by cyclically
+        concatenating source documents (K-stress addendum: Spec-Bench
+        passages are ~800 tokens; capacity pressure needs ~7k+).
+
+        Token count is approximated as words * 1.3 -- adequate because the
+        capacity arithmetic only needs the right ballpark, and every run
+        records the measured prompt_tokens_mean. Docs are trimmed to a
+        uniform word count so per-request KV demand is homogeneous.
+        """
+        target_tokens = self.params.get("doc_target_tokens")
+        if not target_tokens:
+            return records
+        target_words = max(1, int(int(target_tokens) / 1.3))
+        sized = []
+        n = len(records)
+        for j in range(n):
+            words: List[str] = []
+            i = j
+            while len(words) < target_words:
+                words.extend(records[i % n]["document"].split())
+                i += 1
+            sized.append({
+                "document": " ".join(words[:target_words]),
+                "question": records[j].get("question"),
+            })
+        return sized
+
     def questions_per_doc(self) -> int:
         if "questions_per_doc" in self.params:
             return int(self.params["questions_per_doc"])
@@ -213,7 +241,7 @@ class RagSharedPrefixWorkload(Workload):
     def build(self) -> List[PromptItem]:
         num_requests = int(self.params.get("num_requests", 64))
         qpd = self.questions_per_doc()
-        docs = self._load_docs()
+        docs = self._size_docs(self._load_docs())
 
         n_docs_needed = (num_requests + qpd - 1) // qpd
         if n_docs_needed > len(docs):

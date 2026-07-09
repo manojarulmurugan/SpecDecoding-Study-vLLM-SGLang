@@ -40,6 +40,11 @@ class FakeVllmServer:
         self.request_count = 0
         self.in_flight = 0
         self.max_in_flight_seen = 0
+        # capacity-pressure knobs for K-stress tests: kv usage rises with
+        # in-flight requests; preemptions accumulate per request
+        self.kv_usage_per_request = 0.1
+        self.waiting_reported = 0
+        self.preemptions_per_request = 0
         self.seen_payloads: List[dict] = []
         self._lock = threading.Lock()
         self._httpd: Optional[ThreadingHTTPServer] = None
@@ -140,6 +145,11 @@ class FakeVllmServer:
             "# HELP vllm:request_success_total requests",
             'vllm:request_success_total{model_name="fake"} %d' % self.request_count,
             'vllm:num_requests_running{model_name="fake"} %d' % self.in_flight,
+            'vllm:num_requests_waiting{model_name="fake"} %d' % self.waiting_reported,
+            'vllm:kv_cache_usage_perc{model_name="fake"} %.3f'
+            % min(1.0, self.in_flight * self.kv_usage_per_request),
+            'vllm:num_preemptions_total{model_name="fake"} %d'
+            % (self.request_count * self.preemptions_per_request),
         ]
         if self.spec_metrics:
             n = self.request_count
