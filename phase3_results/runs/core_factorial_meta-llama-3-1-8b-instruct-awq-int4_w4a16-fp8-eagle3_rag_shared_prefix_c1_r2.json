@@ -2,7 +2,7 @@
   "config": {
     "batch_sample_interval_s": 1.0,
     "block": "core_factorial",
-    "concurrency": 8,
+    "concurrency": 1,
     "decoding": "greedy",
     "draft_model": "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B",
     "engine": "vllm",
@@ -24,14 +24,14 @@
     },
     "gpu_target": "a100",
     "model": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
-    "repeat_idx": 0,
-    "run_id": "core_factorial_meta-llama-3-1-8b-instruct-awq-int4_w4a16-fp8-eagle3_rag_shared_prefix_c8_r0",
+    "repeat_idx": 2,
+    "run_id": "core_factorial_meta-llama-3-1-8b-instruct-awq-int4_w4a16-fp8-eagle3_rag_shared_prefix_c1_r2",
     "seed": 1234,
     "warmup_requests": 4,
     "workload": "rag_shared_prefix",
     "workload_params": {
       "max_new_tokens": 256,
-      "num_requests": 160,
+      "num_requests": 64,
       "prefix_overlap": "high",
       "spec_bench_file": "external/Spec-Bench/data/spec_bench/question.jsonl"
     }
@@ -42,66 +42,66 @@
     "engine_version": "0.24.0",
     "git_commit": "76252b30f9a56917108d897fb6c1e53d4c674012",
     "gpu_name": "NVIDIA A100-SXM4-80GB",
-    "timestamp_utc": "2026-07-10T03:16:00.218230+00:00"
+    "timestamp_utc": "2026-07-10T06:15:42.411364+00:00"
   },
   "measured": {
-    "acceptance_rate": 0.3055727938438625,
-    "accepted_length_tau": 2.5278639692193123,
+    "acceptance_rate": 0.2903254972875226,
+    "accepted_length_tau": 2.451627486437613,
     "accuracy": null,
     "e2e_latency_ms": {
-      "mean": 2633.1761715750044,
-      "p50": 2644.3944859998965,
-      "p95": 3296.8440041499657,
-      "p99": 3725.181866189953
+      "mean": 2018.8594428280169,
+      "p50": 2006.9469914997171,
+      "p95": 2583.7446166988225,
+      "p99": 3105.3024069797166
     },
     "emergent_batch_size": {
-      "max": 8.0,
-      "mean": 7.314814814814815,
-      "num_samples": 54,
-      "p50": 8.0
+      "max": 1.0,
+      "mean": 0.9457364341085271,
+      "num_samples": 129,
+      "p50": 1.0
     },
-    "goodput_tok_s": 753.4770609776951,
+    "goodput_tok_s": 125.37499711066738,
     "itl_ms": {
-      "mean": 24.59975018809727,
-      "p50": 20.869478000008712,
-      "p95": 76.68565700009822,
-      "p99": 85.34672949988817
+      "mean": 18.544939802473795,
+      "p50": 18.470565999450628,
+      "p95": 19.575333800275985,
+      "p99": 20.67318110010092
     },
     "kv_cache_usage": {
-      "max": 0.007466325861402168,
-      "mean": 0.0063857389937400704,
-      "num_samples": 54,
-      "p50": 0.006751643768812932
+      "max": 0.0009940193171087408,
+      "mean": 0.0007889225665373366,
+      "num_samples": 129,
+      "p50": 0.0008283494309239137
     },
     "num_errors": 0,
     "num_preemptions": 0.0,
-    "num_requests": 160,
-    "prompt_tokens_mean": 697.40625,
+    "num_requests": 64,
+    "prompt_tokens_mean": 680.078125,
     "queue_depth": {
       "max": 0.0,
       "mean": 0.0,
-      "num_samples": 54,
+      "num_samples": 129,
       "p50": 0.0
     },
-    "request_decode_tok_s_mean": 104.9745001227097,
-    "request_tok_s_mean": 98.402510660753,
-    "spec_num_drafts": 16114.0,
-    "spec_rejected_tok_s": 1038.095088936273,
-    "throughput_tok_s": 753.4770609776951,
-    "total_completion_tokens": 40610,
+    "request_decode_tok_s_mean": 135.40140398745257,
+    "request_tok_s_mean": 128.3624423364658,
+    "spec_num_drafts": 6636.0,
+    "spec_rejected_tok_s": 182.22363168723442,
+    "throughput_tok_s": 125.37499711066738,
+    "total_completion_tokens": 16201,
     "ttft_ms": {
-      "mean": 155.67383075625827,
-      "p50": 122.03209850008534,
-      "p95": 249.33001304983634,
-      "p99": 555.588142509996
+      "mean": 98.58887921873816,
+      "p50": 98.92752799987647,
+      "p95": 102.11249994999889,
+      "p99": 103.32916146962816
     },
-    "wall_time_s": 53.89679673499995
+    "wall_time_s": 129.2203419610014
   },
-  "run_id": "core_factorial_meta-llama-3-1-8b-instruct-awq-int4_w4a16-fp8-eagle3_rag_shared_prefix_c8_r0",
+  "run_id": "core_factorial_meta-llama-3-1-8b-instruct-awq-int4_w4a16-fp8-eagle3_rag_shared_prefix_c1_r2",
   "score_details": [
     {
       "num_empty_outputs": 0,
-      "num_outputs": 160
+      "num_outputs": 64
     }
   ],
   "status": "ok"
