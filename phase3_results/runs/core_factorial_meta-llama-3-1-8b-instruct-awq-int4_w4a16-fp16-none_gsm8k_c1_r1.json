@@ -1,0 +1,359 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "core_factorial",
+    "concurrency": 1,
+    "decoding": "greedy",
+    "draft_model": null,
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "extra": [],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp16",
+      "spec_decode": "none",
+      "weight_quant": "w4a16"
+    },
+    "gpu_target": "a100",
+    "model": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
+    "repeat_idx": 1,
+    "run_id": "core_factorial_meta-llama-3-1-8b-instruct-awq-int4_w4a16-fp16-none_gsm8k_c1_r1",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "gsm8k",
+    "workload_params": {
+      "max_new_tokens": 256,
+      "n_shot": 8,
+      "num_requests": 64
+    }
+  },
+  "env": {
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "78c3900f99958d2dc9f6373568067446aec7bba4",
+    "gpu_name": "NVIDIA A100-SXM4-80GB",
+    "timestamp_utc": "2026-07-09T23:52:43.332743+00:00"
+  },
+  "measured": {
+    "acceptance_rate": null,
+    "accepted_length_tau": null,
+    "accuracy": 0.640625,
+    "e2e_latency_ms": {
+      "mean": 1367.1920038437406,
+      "p50": 1367.2377835000589,
+      "p95": 1370.8831480492336,
+      "p99": 1372.5530580199484
+    },
+    "emergent_batch_size": {
+      "max": 1.0,
+      "mean": 0.9425287356321839,
+      "num_samples": 87,
+      "p50": 1.0
+    },
+    "goodput_tok_s": 187.21869725833207,
+    "itl_ms": {
+      "mean": 5.090017647751466,
+      "p50": 5.089051500362984,
+      "p95": 5.2826805002951005,
+      "p99": 5.388542989039706
+    },
+    "kv_cache_usage": {
+      "max": 0.001957952174610811,
+      "mean": 0.0016067235199604523,
+      "num_samples": 87,
+      "p50": 0.0017011715615471434
+    },
+    "num_errors": 0,
+    "num_preemptions": 0.0,
+    "num_requests": 64,
+    "prompt_tokens_mean": 713.4375,
+    "queue_depth": {
+      "max": 0.0,
+      "mean": 0.0,
+      "num_samples": 87,
+      "p50": 0.0
+    },
+    "request_decode_tok_s_mean": 197.25762192877468,
+    "request_tok_s_mean": 187.24549846983444,
+    "spec_num_drafts": null,
+    "spec_rejected_tok_s": null,
+    "throughput_tok_s": 187.21869725833207,
+    "total_completion_tokens": 16384,
+    "ttft_ms": {
+      "mean": 69.39656671860917,
+      "p50": 69.3211194993637,
+      "p95": 73.15359624990379,
+      "p99": 74.43476386002656
+    },
+    "wall_time_s": 87.5126268899985
+  },
+  "run_id": "core_factorial_meta-llama-3-1-8b-instruct-awq-int4_w4a16-fp16-none_gsm8k_c1_r1",
+  "score_details": [
+    {
+      "correct": false,
+      "pred": "30"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": false,
+      "pred": "24"
+    },
+    {
+      "correct": true,
+      "pred": "187"
+    },
+    {
+      "correct": true,
+      "pred": "17"
+    },
+    {
+      "correct": false,
+      "pred": "15"
+    },
+    {
+      "correct": true,
+      "pred": "130"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "100"
+    },
+    {
+      "correct": true,
+      "pred": "21"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "120000"
+    },
+    {
+      "correct": true,
+      "pred": "31"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": false,
+      "pred": "28"
+    },
+    {
+      "correct": false,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "132"
+    },
+    {
+      "correct": false,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "300"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": false,
+      "pred": "250000"
+    },
+    {
+      "correct": true,
+      "pred": "93000"
+    },
+    {
+      "correct": true,
+      "pred": "36"
+    },
+    {
+      "correct": false,
+      "pred": "5800"
+    },
+    {
+      "correct": true,
+      "pred": "53"
+    },
+    {
+      "correct": false,
+      "pred": "25"
+    },
+    {
+      "correct": false,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "98"
+    },
+    {
+      "correct": true,
+      "pred": "16"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "25"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": false,
+      "pred": "1040000"
+    },
+    {
+      "correct": true,
+      "pred": "1240"
+    },
+    {
+      "correct": false,
+      "pred": "-50"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "123"
+    },
+    {
+      "correct": true,
+      "pred": "500"
+    },
+    {
+      "correct": true,
+      "pred": "34"
+    },
+    {
+      "correct": false,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "14"
+    },
+    {
+      "correct": false,
+      "pred": "21"
+    },
+    {
+      "correct": false,
+      "pred": "15"
+    },
+    {
+      "correct": true,
+      "pred": "100"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": false,
+      "pred": "600"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": true,
+      "pred": "95"
+    },
+    {
+      "correct": false,
+      "pred": "24"
+    },
+    {
+      "correct": false,
+      "pred": "32"
+    },
+    {
+      "correct": true,
+      "pred": "1000"
+    },
+    {
+      "correct": false,
+      "pred": "1"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": false,
+      "pred": "20"
+    },
+    {
+      "correct": false,
+      "pred": "20"
+    },
+    {
+      "correct": true,
+      "pred": "150"
+    },
+    {
+      "correct": true,
+      "pred": "75"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": true,
+      "pred": "2325"
+    }
+  ],
+  "status": "ok"
+}

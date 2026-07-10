@@ -1,0 +1,743 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "core_factorial",
+    "concurrency": 8,
+    "decoding": "greedy",
+    "draft_model": "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B",
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "extra": [],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp8",
+      "spec_decode": "eagle3",
+      "weight_quant": "fp16"
+    },
+    "gpu_target": "a100",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "repeat_idx": 0,
+    "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp8-eagle3_gsm8k_c8_r0",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "gsm8k",
+    "workload_params": {
+      "max_new_tokens": 256,
+      "n_shot": 8,
+      "num_requests": 160
+    }
+  },
+  "env": {
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "78c3900f99958d2dc9f6373568067446aec7bba4",
+    "gpu_name": "NVIDIA A100-SXM4-80GB",
+    "timestamp_utc": "2026-07-09T20:57:02.650544+00:00"
+  },
+  "measured": {
+    "acceptance_rate": 0.3737205892620261,
+    "accepted_length_tau": 2.868602946310131,
+    "accuracy": 0.775,
+    "e2e_latency_ms": {
+      "mean": 2706.3708353750144,
+      "p50": 2652.653785000439,
+      "p95": 3342.6189260001593,
+      "p99": 3583.304716640123
+    },
+    "emergent_batch_size": {
+      "max": 8.0,
+      "mean": 7.4,
+      "num_samples": 55,
+      "p50": 8.0
+    },
+    "goodput_tok_s": 742.4575058321976,
+    "itl_ms": {
+      "mean": 28.5978896341554,
+      "p50": 25.3618019996793,
+      "p95": 67.24808190065232,
+      "p99": 78.56359953988432
+    },
+    "kv_cache_usage": {
+      "max": 0.009415252709389255,
+      "mean": 0.007908812275886948,
+      "num_samples": 55,
+      "p50": 0.00833350027043811
+    },
+    "num_errors": 0,
+    "num_preemptions": 0.0,
+    "num_requests": 160,
+    "prompt_tokens_mean": 716.3125,
+    "queue_depth": {
+      "max": 0.0,
+      "mean": 0.0,
+      "num_samples": 55,
+      "p50": 0.0
+    },
+    "request_decode_tok_s_mean": 101.48698411309937,
+    "request_tok_s_mean": 95.81824101968922,
+    "spec_num_drafts": 14323.0,
+    "spec_rejected_tok_s": 812.9873436054662,
+    "throughput_tok_s": 742.4575058321976,
+    "total_completion_tokens": 40960,
+    "ttft_ms": {
+      "mean": 146.32350268746563,
+      "p50": 119.78505700017195,
+      "p95": 211.51680615002934,
+      "p99": 494.1989085099067
+    },
+    "wall_time_s": 55.168140503999894
+  },
+  "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp8-eagle3_gsm8k_c8_r0",
+  "score_details": [
+    {
+      "correct": true,
+      "pred": "694"
+    },
+    {
+      "correct": true,
+      "pred": "125"
+    },
+    {
+      "correct": true,
+      "pred": "104"
+    },
+    {
+      "correct": true,
+      "pred": "35"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": false,
+      "pred": "48"
+    },
+    {
+      "correct": true,
+      "pred": "14"
+    },
+    {
+      "correct": true,
+      "pred": "1596"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "100"
+    },
+    {
+      "correct": true,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "623"
+    },
+    {
+      "correct": false,
+      "pred": "22"
+    },
+    {
+      "correct": true,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "348"
+    },
+    {
+      "correct": false,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "5"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "10000"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "40"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": false,
+      "pred": "-76"
+    },
+    {
+      "correct": true,
+      "pred": "16"
+    },
+    {
+      "correct": false,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "1400"
+    },
+    {
+      "correct": true,
+      "pred": "16"
+    },
+    {
+      "correct": true,
+      "pred": "1210"
+    },
+    {
+      "correct": true,
+      "pred": "130"
+    },
+    {
+      "correct": true,
+      "pred": "23"
+    },
+    {
+      "correct": true,
+      "pred": "30"
+    },
+    {
+      "correct": false,
+      "pred": "18"
+    },
+    {
+      "correct": false,
+      "pred": "109200"
+    },
+    {
+      "correct": true,
+      "pred": "2600"
+    },
+    {
+      "correct": true,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "90"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": true,
+      "pred": "21"
+    },
+    {
+      "correct": true,
+      "pred": "280"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": true,
+      "pred": "18"
+    },
+    {
+      "correct": true,
+      "pred": "1375"
+    },
+    {
+      "correct": true,
+      "pred": "360"
+    },
+    {
+      "correct": false,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "370"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "3200"
+    },
+    {
+      "correct": true,
+      "pred": "120000"
+    },
+    {
+      "correct": true,
+      "pred": "156"
+    },
+    {
+      "correct": true,
+      "pred": "12"
+    },
+    {
+      "correct": true,
+      "pred": "1"
+    },
+    {
+      "correct": true,
+      "pred": "310"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "87"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": true,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": false,
+      "pred": "801"
+    },
+    {
+      "correct": false,
+      "pred": "36"
+    },
+    {
+      "correct": true,
+      "pred": "168"
+    },
+    {
+      "correct": true,
+      "pred": "168000"
+    },
+    {
+      "correct": false,
+      "pred": "500"
+    },
+    {
+      "correct": true,
+      "pred": "56"
+    },
+    {
+      "correct": false,
+      "pred": "14000"
+    },
+    {
+      "correct": true,
+      "pred": "2"
+    },
+    {
+      "correct": true,
+      "pred": "98"
+    },
+    {
+      "correct": true,
+      "pred": "112"
+    },
+    {
+      "correct": true,
+      "pred": "40"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": false,
+      "pred": "550"
+    },
+    {
+      "correct": true,
+      "pred": "110"
+    },
+    {
+      "correct": true,
+      "pred": "74"
+    },
+    {
+      "correct": true,
+      "pred": "48"
+    },
+    {
+      "correct": true,
+      "pred": "30"
+    },
+    {
+      "correct": true,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "450"
+    },
+    {
+      "correct": true,
+      "pred": "160"
+    },
+    {
+      "correct": true,
+      "pred": "12"
+    },
+    {
+      "correct": false,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "800"
+    },
+    {
+      "correct": true,
+      "pred": "42"
+    },
+    {
+      "correct": true,
+      "pred": "312"
+    },
+    {
+      "correct": true,
+      "pred": "36"
+    },
+    {
+      "correct": true,
+      "pred": "76"
+    },
+    {
+      "correct": true,
+      "pred": "160"
+    },
+    {
+      "correct": false,
+      "pred": "160000"
+    },
+    {
+      "correct": false,
+      "pred": "9.00"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "168"
+    },
+    {
+      "correct": true,
+      "pred": "3000"
+    },
+    {
+      "correct": true,
+      "pred": "385000"
+    },
+    {
+      "correct": false,
+      "pred": "3150"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "112"
+    },
+    {
+      "correct": true,
+      "pred": "98"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": false,
+      "pred": "6"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": false,
+      "pred": "0"
+    },
+    {
+      "correct": false,
+      "pred": "97"
+    },
+    {
+      "correct": true,
+      "pred": "123"
+    },
+    {
+      "correct": true,
+      "pred": "40"
+    },
+    {
+      "correct": true,
+      "pred": "12"
+    },
+    {
+      "correct": true,
+      "pred": "480"
+    },
+    {
+      "correct": true,
+      "pred": "250"
+    },
+    {
+      "correct": false,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "14"
+    },
+    {
+      "correct": true,
+      "pred": "842"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "42"
+    },
+    {
+      "correct": false,
+      "pred": "150"
+    },
+    {
+      "correct": false,
+      "pred": "10"
+    },
+    {
+      "correct": false,
+      "pred": "38.4"
+    },
+    {
+      "correct": true,
+      "pred": "200"
+    },
+    {
+      "correct": true,
+      "pred": "30"
+    },
+    {
+      "correct": true,
+      "pred": "227"
+    },
+    {
+      "correct": true,
+      "pred": "5"
+    },
+    {
+      "correct": true,
+      "pred": "63"
+    },
+    {
+      "correct": true,
+      "pred": "15"
+    },
+    {
+      "correct": false,
+      "pred": "44"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "78"
+    },
+    {
+      "correct": false,
+      "pred": "139"
+    },
+    {
+      "correct": true,
+      "pred": "77"
+    },
+    {
+      "correct": false,
+      "pred": "40"
+    },
+    {
+      "correct": false,
+      "pred": "15"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "736"
+    },
+    {
+      "correct": true,
+      "pred": "2400"
+    },
+    {
+      "correct": true,
+      "pred": "320"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": true,
+      "pred": "26"
+    },
+    {
+      "correct": true,
+      "pred": "25"
+    },
+    {
+      "correct": true,
+      "pred": "38"
+    },
+    {
+      "correct": true,
+      "pred": "5"
+    },
+    {
+      "correct": false,
+      "pred": "16"
+    },
+    {
+      "correct": true,
+      "pred": "1"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": false,
+      "pred": "14"
+    },
+    {
+      "correct": false,
+      "pred": "14"
+    },
+    {
+      "correct": true,
+      "pred": "280"
+    },
+    {
+      "correct": false,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "2400"
+    },
+    {
+      "correct": false,
+      "pred": "150"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": true,
+      "pred": "225"
+    },
+    {
+      "correct": false,
+      "pred": "63"
+    },
+    {
+      "correct": true,
+      "pred": "235"
+    },
+    {
+      "correct": true,
+      "pred": "70"
+    },
+    {
+      "correct": true,
+      "pred": "665"
+    },
+    {
+      "correct": true,
+      "pred": "180"
+    }
+  ],
+  "status": "ok"
+}

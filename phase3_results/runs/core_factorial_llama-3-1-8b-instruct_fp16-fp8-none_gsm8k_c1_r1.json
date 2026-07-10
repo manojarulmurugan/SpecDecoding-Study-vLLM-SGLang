@@ -1,0 +1,359 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "core_factorial",
+    "concurrency": 1,
+    "decoding": "greedy",
+    "draft_model": null,
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "extra": [],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp8",
+      "spec_decode": "none",
+      "weight_quant": "fp16"
+    },
+    "gpu_target": "a100",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "repeat_idx": 1,
+    "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp8-none_gsm8k_c1_r1",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "gsm8k",
+    "workload_params": {
+      "max_new_tokens": 256,
+      "n_shot": 8,
+      "num_requests": 64
+    }
+  },
+  "env": {
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "78c3900f99958d2dc9f6373568067446aec7bba4",
+    "gpu_name": "NVIDIA A100-SXM4-80GB",
+    "timestamp_utc": "2026-07-09T22:51:34.778765+00:00"
+  },
+  "measured": {
+    "acceptance_rate": null,
+    "accepted_length_tau": null,
+    "accuracy": 0.65625,
+    "e2e_latency_ms": {
+      "mean": 2991.112955093797,
+      "p50": 2990.6757055005073,
+      "p95": 2996.120466399862,
+      "p99": 2999.9097565593906
+    },
+    "emergent_batch_size": {
+      "max": 1.0,
+      "mean": 0.968421052631579,
+      "num_samples": 190,
+      "p50": 1.0
+    },
+    "goodput_tok_s": 85.58106640543764,
+    "itl_ms": {
+      "mean": 11.487396705147193,
+      "p50": 11.486822999358992,
+      "p95": 11.685625400150457,
+      "p99": 11.926220340355938
+    },
+    "kv_cache_usage": {
+      "max": 0.0012198376091182572,
+      "mean": 0.000978578608301718,
+      "num_samples": 190,
+      "p50": 0.0010101780200511001
+    },
+    "num_errors": 0,
+    "num_preemptions": 0.0,
+    "num_requests": 64,
+    "prompt_tokens_mean": 713.4375,
+    "queue_depth": {
+      "max": 0.0,
+      "mean": 0.0,
+      "num_samples": 190,
+      "p50": 0.0
+    },
+    "request_decode_tok_s_mean": 87.39337708142138,
+    "request_tok_s_mean": 85.5869657321866,
+    "spec_num_drafts": null,
+    "spec_rejected_tok_s": null,
+    "throughput_tok_s": 85.58106640543764,
+    "total_completion_tokens": 16384,
+    "ttft_ms": {
+      "mean": 61.826795281263,
+      "p50": 61.49850200017681,
+      "p95": 62.93917404991589,
+      "p99": 68.50322544965819
+    },
+    "wall_time_s": 191.44421410199902
+  },
+  "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp8-none_gsm8k_c1_r1",
+  "score_details": [
+    {
+      "correct": false,
+      "pred": "30"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": false,
+      "pred": "48"
+    },
+    {
+      "correct": true,
+      "pred": "187"
+    },
+    {
+      "correct": true,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "130"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "100"
+    },
+    {
+      "correct": true,
+      "pred": "21"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "120000"
+    },
+    {
+      "correct": false,
+      "pred": "35"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "56"
+    },
+    {
+      "correct": false,
+      "pred": "67"
+    },
+    {
+      "correct": true,
+      "pred": "132"
+    },
+    {
+      "correct": false,
+      "pred": "18"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "300"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": false,
+      "pred": "5"
+    },
+    {
+      "correct": true,
+      "pred": "93000"
+    },
+    {
+      "correct": true,
+      "pred": "36"
+    },
+    {
+      "correct": true,
+      "pred": "4800"
+    },
+    {
+      "correct": true,
+      "pred": "53"
+    },
+    {
+      "correct": false,
+      "pred": "25"
+    },
+    {
+      "correct": false,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "98"
+    },
+    {
+      "correct": true,
+      "pred": "16"
+    },
+    {
+      "correct": false,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "25"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": false,
+      "pred": "960000"
+    },
+    {
+      "correct": false,
+      "pred": "1200"
+    },
+    {
+      "correct": false,
+      "pred": "0"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "123"
+    },
+    {
+      "correct": true,
+      "pred": "500"
+    },
+    {
+      "correct": true,
+      "pred": "34"
+    },
+    {
+      "correct": false,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "14"
+    },
+    {
+      "correct": false,
+      "pred": "21"
+    },
+    {
+      "correct": false,
+      "pred": "-5"
+    },
+    {
+      "correct": true,
+      "pred": "100"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": false,
+      "pred": "600"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": true,
+      "pred": "2"
+    },
+    {
+      "correct": true,
+      "pred": "95"
+    },
+    {
+      "correct": false,
+      "pred": "24"
+    },
+    {
+      "correct": true,
+      "pred": "26"
+    },
+    {
+      "correct": true,
+      "pred": "1000"
+    },
+    {
+      "correct": false,
+      "pred": "135"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": false,
+      "pred": "20"
+    },
+    {
+      "correct": false,
+      "pred": "5"
+    },
+    {
+      "correct": true,
+      "pred": "150"
+    },
+    {
+      "correct": true,
+      "pred": "75"
+    },
+    {
+      "correct": false,
+      "pred": "1"
+    },
+    {
+      "correct": true,
+      "pred": "2325"
+    }
+  ],
+  "status": "ok"
+}

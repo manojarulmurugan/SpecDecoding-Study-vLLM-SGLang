@@ -1,0 +1,108 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "core_factorial",
+    "concurrency": 32,
+    "decoding": "greedy",
+    "draft_model": "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B",
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "extra": [],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp8",
+      "spec_decode": "eagle3",
+      "weight_quant": "fp16"
+    },
+    "gpu_target": "a100",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "repeat_idx": 0,
+    "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp8-eagle3_rag_shared_prefix_c32_r0",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "rag_shared_prefix",
+    "workload_params": {
+      "max_new_tokens": 256,
+      "num_requests": 320,
+      "prefix_overlap": "high",
+      "spec_bench_file": "external/Spec-Bench/data/spec_bench/question.jsonl"
+    }
+  },
+  "env": {
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "78c3900f99958d2dc9f6373568067446aec7bba4",
+    "gpu_name": "NVIDIA A100-SXM4-80GB",
+    "timestamp_utc": "2026-07-09T21:08:37.412389+00:00"
+  },
+  "measured": {
+    "acceptance_rate": 0.3069961132704053,
+    "accepted_length_tau": 2.5349805663520266,
+    "accuracy": null,
+    "e2e_latency_ms": {
+      "mean": 5452.912839900011,
+      "p50": 5372.830012000577,
+      "p95": 7138.863311449676,
+      "p99": 8176.76969383997
+    },
+    "emergent_batch_size": {
+      "max": 32.0,
+      "mean": 29.553571428571427,
+      "num_samples": 56,
+      "p50": 31.0
+    },
+    "goodput_tok_s": 1455.1312559227254,
+    "itl_ms": {
+      "mean": 50.800975958170135,
+      "p50": 38.62516100070934,
+      "p95": 92.8716452001026,
+      "p99": 156.07284591984353
+    },
+    "kv_cache_usage": {
+      "max": 0.03565776558024003,
+      "mean": 0.031178366095932553,
+      "num_samples": 56,
+      "p50": 0.03280314108856347
+    },
+    "num_errors": 0,
+    "num_preemptions": 0.0,
+    "num_requests": 320,
+    "prompt_tokens_mean": 710.9125,
+    "queue_depth": {
+      "max": 16.0,
+      "mean": 0.2857142857142857,
+      "num_samples": 56,
+      "p50": 0.0
+    },
+    "request_decode_tok_s_mean": 51.773824446712055,
+    "request_tok_s_mean": 48.7589177490189,
+    "spec_num_drafts": 32418.0,
+    "spec_rejected_tok_s": 1995.2812359197242,
+    "throughput_tok_s": 1455.1312559227254,
+    "total_completion_tokens": 81920,
+    "ttft_ms": {
+      "mean": 306.61522228750755,
+      "p50": 208.70773050000935,
+      "p95": 1167.1842904995174,
+      "p99": 1851.914605869979
+    },
+    "wall_time_s": 56.29732690200035
+  },
+  "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp8-eagle3_rag_shared_prefix_c32_r0",
+  "score_details": [
+    {
+      "num_empty_outputs": 0,
+      "num_outputs": 320
+    }
+  ],
+  "status": "ok"
+}

@@ -1,0 +1,359 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "core_factorial",
+    "concurrency": 1,
+    "decoding": "greedy",
+    "draft_model": "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B",
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "extra": [],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp16",
+      "spec_decode": "eagle3",
+      "weight_quant": "fp16"
+    },
+    "gpu_target": "a100",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "repeat_idx": 1,
+    "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp16-eagle3_gsm8k_c1_r1",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "gsm8k",
+    "workload_params": {
+      "max_new_tokens": 256,
+      "n_shot": 8,
+      "num_requests": 64
+    }
+  },
+  "env": {
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "78c3900f99958d2dc9f6373568067446aec7bba4",
+    "gpu_name": "NVIDIA A100-SXM4-80GB",
+    "timestamp_utc": "2026-07-09T23:38:05.584792+00:00"
+  },
+  "measured": {
+    "acceptance_rate": 0.3715377932232841,
+    "accepted_length_tau": 2.85768896611642,
+    "accuracy": 0.71875,
+    "e2e_latency_ms": {
+      "mean": 1318.325098312357,
+      "p50": 1274.2485334993034,
+      "p95": 1585.3075354483735,
+      "p99": 1642.8254129703232
+    },
+    "emergent_batch_size": {
+      "max": 1.0,
+      "mean": 0.9523809523809523,
+      "num_samples": 84,
+      "p50": 1.0
+    },
+    "goodput_tok_s": 194.1566694603423,
+    "itl_ms": {
+      "mean": 13.955698942135575,
+      "p50": 13.941060000433936,
+      "p95": 14.183282700287236,
+      "p99": 15.094381839953712
+    },
+    "kv_cache_usage": {
+      "max": 0.0024440081734043995,
+      "mean": 0.0020290419144539953,
+      "num_samples": 84,
+      "p50": 0.002083416803557836
+    },
+    "num_errors": 0,
+    "num_preemptions": 0.0,
+    "num_requests": 64,
+    "prompt_tokens_mean": 713.4375,
+    "queue_depth": {
+      "max": 0.0,
+      "mean": 0.0,
+      "num_samples": 84,
+      "p50": 0.0
+    },
+    "request_decode_tok_s_mean": 206.5976323161214,
+    "request_tok_s_mean": 196.43969701212552,
+    "spec_num_drafts": 5755.0,
+    "spec_rejected_tok_s": 214.302319978078,
+    "throughput_tok_s": 194.1566694603423,
+    "total_completion_tokens": 16384,
+    "ttft_ms": {
+      "mean": 63.40248250000968,
+      "p50": 65.57986549978523,
+      "p95": 66.32199419937024,
+      "p99": 71.04102974890336
+    },
+    "wall_time_s": 84.3854606979985
+  },
+  "run_id": "core_factorial_llama-3-1-8b-instruct_fp16-fp16-eagle3_gsm8k_c1_r1",
+  "score_details": [
+    {
+      "correct": false,
+      "pred": "7"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": false,
+      "pred": "36"
+    },
+    {
+      "correct": true,
+      "pred": "187"
+    },
+    {
+      "correct": true,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "130"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "100"
+    },
+    {
+      "correct": true,
+      "pred": "21"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "120000"
+    },
+    {
+      "correct": false,
+      "pred": "35"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "56"
+    },
+    {
+      "correct": false,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "132"
+    },
+    {
+      "correct": false,
+      "pred": "18"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "300"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": false,
+      "pred": "6850000"
+    },
+    {
+      "correct": true,
+      "pred": "93000"
+    },
+    {
+      "correct": true,
+      "pred": "36"
+    },
+    {
+      "correct": true,
+      "pred": "4800"
+    },
+    {
+      "correct": true,
+      "pred": "53"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": false,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "98"
+    },
+    {
+      "correct": true,
+      "pred": "16"
+    },
+    {
+      "correct": false,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "25"
+    },
+    {
+      "correct": false,
+      "pred": "12"
+    },
+    {
+      "correct": false,
+      "pred": "1040000"
+    },
+    {
+      "correct": true,
+      "pred": "1240"
+    },
+    {
+      "correct": true,
+      "pred": "50"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "123"
+    },
+    {
+      "correct": true,
+      "pred": "500"
+    },
+    {
+      "correct": true,
+      "pred": "34"
+    },
+    {
+      "correct": false,
+      "pred": "4"
+    },
+    {
+      "correct": true,
+      "pred": "14"
+    },
+    {
+      "correct": false,
+      "pred": "21"
+    },
+    {
+      "correct": true,
+      "pred": "5"
+    },
+    {
+      "correct": true,
+      "pred": "100"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": false,
+      "pred": "600"
+    },
+    {
+      "correct": false,
+      "pred": "18"
+    },
+    {
+      "correct": true,
+      "pred": "2"
+    },
+    {
+      "correct": true,
+      "pred": "95"
+    },
+    {
+      "correct": false,
+      "pred": "24"
+    },
+    {
+      "correct": true,
+      "pred": "26"
+    },
+    {
+      "correct": true,
+      "pred": "1000"
+    },
+    {
+      "correct": false,
+      "pred": "337.5"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": false,
+      "pred": "2"
+    },
+    {
+      "correct": true,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "150"
+    },
+    {
+      "correct": true,
+      "pred": "75"
+    },
+    {
+      "correct": true,
+      "pred": "7"
+    },
+    {
+      "correct": true,
+      "pred": "2325"
+    }
+  ],
+  "status": "ok"
+}
