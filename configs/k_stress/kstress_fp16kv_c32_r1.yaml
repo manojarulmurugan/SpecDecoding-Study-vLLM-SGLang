@@ -14,6 +14,12 @@ workload_params:
   max_new_tokens: 256
   prefix_overlap: low
   doc_target_tokens: 7400
+  # Tokenizer-exact doc sizing + hard prompt budget (Phase-3b root-cause
+  # fix): word-approximated sizing let ~10% of docs overshoot
+  # max_model_len - max_new_tokens (7936) and draw 400s from vLLM.
+  # Budget 7900 = 7936 minus BOS + round-trip jitter margin.
+  tokenizer_model: meta-llama/Llama-3.1-8B-Instruct
+  prompt_token_budget: 7900
   request_timeout_s: 1800
   spec_bench_file: external/Spec-Bench/data/spec_bench/question.jsonl
 concurrency: 32

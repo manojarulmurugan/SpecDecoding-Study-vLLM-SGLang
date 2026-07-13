@@ -133,6 +133,22 @@ def synthetic_documents(n_docs: int, sentences_per_doc: int = 120) -> List[str]:
     return docs
 
 
+def _encode(tokenizer: Any, text: str) -> List[int]:
+    """Tokenize WITHOUT special tokens when the tokenizer supports the
+    flag (HF adds BOS by default, which would skew sizing by one)."""
+    try:
+        return list(tokenizer.encode(text, add_special_tokens=False))
+    except TypeError:
+        return list(tokenizer.encode(text))
+
+
+def _decode(tokenizer: Any, ids: List[int]) -> str:
+    try:
+        return tokenizer.decode(ids, skip_special_tokens=True)
+    except TypeError:
+        return tokenizer.decode(ids)
+
+
 def check_shared_prefix_token_ids(items: Sequence[PromptItem], tokenizer) -> int:
     """Assert every same-document prompt starts with the identical prefix
     token IDs under ``tokenizer`` (anything with .encode -> list[int]).
@@ -200,33 +216,87 @@ class RagSharedPrefixWorkload(Workload):
             for doc in synthetic_documents(n_docs)
         ]
 
-    def _size_docs(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Grow each document to ~params["doc_target_tokens"] by cyclically
-        concatenating source documents (K-stress addendum: Spec-Bench
-        passages are ~800 tokens; capacity pressure needs ~7k+).
+    # Conservative words-per-token fallback when no tokenizer is available.
+    # The original 1.3 estimate caused the Phase-3b failure: ~10% of
+    # NQ-passage documents tokenize at >1.39 tokens/word, individually
+    # overshooting max_model_len - max_new_tokens and drawing 400s from
+    # vLLM. 1.5 keeps the fallback safely under budget; the tokenizer-exact
+    # path below is what real runs use (kstress configs set tokenizer_model).
+    FALLBACK_TOKENS_PER_WORD = 1.5
 
-        Token count is approximated as words * 1.3 -- adequate because the
-        capacity arithmetic only needs the right ballpark, and every run
-        records the measured prompt_tokens_mean. Docs are trimmed to a
-        uniform word count so per-request KV demand is homogeneous.
+    def _tokenizer(self) -> Optional[Any]:
+        if "tokenizer" in self.params:
+            return self.params["tokenizer"]
+        model = self.params.get("tokenizer_model")
+        if not model:
+            return None
+        from transformers import AutoTokenizer
+
+        return AutoTokenizer.from_pretrained(model)
+
+    def _size_docs(
+        self, records: List[Dict[str, Any]], tokenizer: Optional[Any]
+    ) -> List[Dict[str, Any]]:
+        """Grow each document to params["doc_target_tokens"] by cyclically
+        concatenating source documents (K-stress: Spec-Bench passages are
+        ~800 tokens; capacity pressure needs ~7k+), then trim to the target
+        TOKENIZER-EXACTLY when a tokenizer is available (encode -> truncate
+        -> decode), else by the conservative word-count fallback.
+
+        Uniform doc length keeps per-request KV demand homogeneous; the
+        deterministic construction keeps prefixes byte-identical per doc.
         """
         target_tokens = self.params.get("doc_target_tokens")
         if not target_tokens:
             return records
-        target_words = max(1, int(int(target_tokens) / 1.3))
+        target_tokens = int(target_tokens)
+        # over-collect words first, then trim on the exact/fallback boundary
+        collect_words = max(1, int(target_tokens * 1.2))
         sized = []
         n = len(records)
         for j in range(n):
             words: List[str] = []
             i = j
-            while len(words) < target_words:
+            while len(words) < collect_words:
                 words.extend(records[i % n]["document"].split())
                 i += 1
-            sized.append({
-                "document": " ".join(words[:target_words]),
-                "question": records[j].get("question"),
-            })
+            text = " ".join(words[:collect_words])
+            if tokenizer is not None:
+                ids = _encode(tokenizer, text)
+                while len(ids) < target_tokens:
+                    words.extend(records[i % n]["document"].split())
+                    i += 1
+                    text = " ".join(words)
+                    ids = _encode(tokenizer, text)
+                text = _decode(tokenizer, ids[:target_tokens])
+            else:
+                text = " ".join(
+                    words[: max(1, int(target_tokens / self.FALLBACK_TOKENS_PER_WORD))]
+                )
+            sized.append({"document": text, "question": records[j].get("question")})
         return sized
+
+    def _fit_doc_to_budget(
+        self, doc: str, questions: List[str], tokenizer: Any, budget: int
+    ) -> str:
+        """Shrink one document until every prompt built from it fits the
+        prompt-token budget. decode/encode round-trips are not always
+        length-stable, hence the loop with a safety margin."""
+        for _ in range(8):
+            prefix = build_prefix(doc)
+            worst = max(
+                len(_encode(tokenizer, build_prompt(prefix, q))) for q in questions
+            )
+            if worst <= budget:
+                return doc
+            ids = _encode(tokenizer, doc)
+            keep = len(ids) - (worst - budget) - 8
+            if keep <= 0:
+                break
+            doc = _decode(tokenizer, ids[:keep])
+        raise ValueError(
+            "could not fit document under prompt_token_budget=%d" % budget
+        )
 
     def questions_per_doc(self) -> int:
         if "questions_per_doc" in self.params:
@@ -241,7 +311,15 @@ class RagSharedPrefixWorkload(Workload):
     def build(self) -> List[PromptItem]:
         num_requests = int(self.params.get("num_requests", 64))
         qpd = self.questions_per_doc()
-        docs = self._size_docs(self._load_docs())
+        tokenizer = self._tokenizer()
+        budget = self.params.get("prompt_token_budget")
+        if budget and tokenizer is None:
+            raise ValueError(
+                "prompt_token_budget requires a tokenizer (set tokenizer_model "
+                "or pass tokenizer=) -- word-count approximation is exactly "
+                "the bug that produced the Phase-3b 400s"
+            )
+        docs = self._size_docs(self._load_docs(), tokenizer)
 
         n_docs_needed = (num_requests + qpd - 1) // qpd
         if n_docs_needed > len(docs):
@@ -250,8 +328,12 @@ class RagSharedPrefixWorkload(Workload):
 
         items: List[PromptItem] = []
         for doc_id, rec in enumerate(docs):
-            prefix = build_prefix(rec["document"])
-            for q in questions_for_doc(qpd, rec.get("question")):
+            questions = questions_for_doc(qpd, rec.get("question"))
+            doc = rec["document"]
+            if budget and tokenizer is not None:
+                doc = self._fit_doc_to_budget(doc, questions, tokenizer, int(budget))
+            prefix = build_prefix(doc)
+            for q in questions:
                 items.append(PromptItem(
                     prompt=build_prompt(prefix, q),
                     meta={"doc_id": doc_id, "prefix": prefix, "question": q},

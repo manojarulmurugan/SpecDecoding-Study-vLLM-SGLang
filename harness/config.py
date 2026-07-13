@@ -194,9 +194,14 @@ def _slug(text: str) -> str:
 
 def load_configs(paths: List[str]) -> List[RunConfig]:
     """Load many config files, expanding globs, preserving order, deduping."""
+    import glob as _glob
+
     files: List[Path] = []
     for p in paths:
-        matches = sorted(Path().glob(p)) if any(ch in p for ch in "*?[") else [Path(p)]
+        if any(ch in p for ch in "*?["):
+            matches = [Path(x) for x in sorted(_glob.glob(p))]
+        else:
+            matches = [Path(p)]
         if not matches:
             raise ConfigError("no config files match %r" % p)
         files.extend(matches)

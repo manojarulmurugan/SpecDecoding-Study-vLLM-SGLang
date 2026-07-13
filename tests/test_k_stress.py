@@ -18,17 +18,87 @@ from tests.conftest import make_config
 
 # -- long-document sizing --------------------------------------------------------
 
+class WordTokenizer:
+    """Deterministic tokenizer: one token per whitespace-separated word.
+    Supports the HF kwargs so the exact-sizing path is exercised."""
+
+    def encode(self, text, add_special_tokens=True):
+        return text.split()
+
+    def decode(self, ids, skip_special_tokens=True):
+        return " ".join(ids)
+
+
+class DriftingTokenizer(WordTokenizer):
+    """Hostile: every decode round-trip appends a word, so a single
+    truncation pass never suffices -- the fitting loop must converge."""
+
+    def decode(self, ids, skip_special_tokens=True):
+        return " ".join(list(ids) + ["drift"])
+
+
 def test_doc_target_tokens_grows_docs_uniformly():
+    # fallback (no tokenizer) path: conservative words-per-token ratio
     wl = RagSharedPrefixWorkload(
         {"synthetic_num_docs": 4, "num_requests": 8, "prefix_overlap": "low",
-         "doc_target_tokens": 1300},
+         "doc_target_tokens": 1500},
         seed=1,
     )
     items = wl.build()
-    target_words = int(1300 / 1.3)
+    target_words = int(1500 / RagSharedPrefixWorkload.FALLBACK_TOKENS_PER_WORD)
     for item in items:
         doc = item.meta["prefix"].split("Document:\n")[1]
         assert len(doc.split()) == target_words, "docs must be uniform length"
+
+
+def test_tokenizer_exact_sizing():
+    wl = RagSharedPrefixWorkload(
+        {"synthetic_num_docs": 4, "num_requests": 8, "prefix_overlap": "low",
+         "doc_target_tokens": 120, "tokenizer": WordTokenizer()},
+        seed=1,
+    )
+    for item in wl.build():
+        doc = item.meta["prefix"].split("Document:\n")[1].strip()
+        assert len(doc.split()) == 120, "exact path must hit the target in tokens"
+
+
+def test_prompt_token_budget_enforced_at_build_time():
+    tok = WordTokenizer()
+    wl = RagSharedPrefixWorkload(
+        {"synthetic_num_docs": 2, "num_requests": 8, "prefix_overlap": "mid",
+         "doc_target_tokens": 200, "prompt_token_budget": 150, "tokenizer": tok},
+        seed=1,
+    )
+    items = wl.build()
+    for item in items:
+        assert len(tok.encode(item.prompt)) <= 150, (
+            "every prompt must fit the budget -- the Phase-3b 400 scenario"
+        )
+    # byte-identity survives the budget fitting
+    from harness.workloads.rag_shared_prefix import check_shared_prefix_token_ids
+
+    assert check_shared_prefix_token_ids(items, tok) >= 1
+
+
+def test_budget_fitting_converges_under_decode_drift():
+    tok = DriftingTokenizer()
+    wl = RagSharedPrefixWorkload(
+        {"synthetic_num_docs": 2, "num_requests": 4, "prefix_overlap": "low",
+         "doc_target_tokens": 200, "prompt_token_budget": 150, "tokenizer": tok},
+        seed=1,
+    )
+    for item in wl.build():
+        assert len(tok.encode(item.prompt)) <= 150
+
+
+def test_budget_without_tokenizer_fails_fast():
+    wl = RagSharedPrefixWorkload(
+        {"synthetic_num_docs": 2, "num_requests": 4, "prefix_overlap": "low",
+         "doc_target_tokens": 200, "prompt_token_budget": 150},
+        seed=1,
+    )
+    with pytest.raises(ValueError, match="requires a tokenizer"):
+        wl.build()
 
 
 def test_doc_sizing_deterministic_and_optional():
@@ -109,29 +179,58 @@ def test_capacity_signals_null_safe_without_gauges(fake_server, gsm8k_questions_
 # -- config set --------------------------------------------------------------------
 
 def test_k_stress_config_set():
+    # Full committed set: K-isolation (16) + AWQ capacity corners (16) +
+    # KS long-context probe (8) -- the standard Phase-3b session runs all
+    # three, so all three are committed (generator emits them by default).
     configs = load_configs(["configs/k_stress/kstress_*.yaml"])
-    assert len(configs) == 16  # 2 kv x 4 conc x 2 repeats
-    assert len({c.run_id for c in configs}) == 16
-    assert len(group_by_server(configs)) == 2
+    assert len(configs) == 40
+    assert len({c.run_id for c in configs}) == 40
+    assert len(group_by_server(configs)) == 6
+
+    capacity = [c for c in configs if c.factors.spec_decode == "none"]
+    probe = [c for c in configs if c.factors.spec_decode != "none"]
+    assert len(capacity) == 32
+    assert len([c for c in capacity if c.factors.weight_quant == "w4a16"]) == 16
+
+    # KS probe: EAGLE-3 on, fp16 weights, BELOW the capacity ceiling (~16)
+    assert len(probe) == 8
+    for cfg in probe:
+        assert cfg.factors.spec_decode == "eagle3"
+        assert cfg.factors.weight_quant == "fp16"
+        assert cfg.draft_model == "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B"
+        assert cfg.concurrency in (1, 8), (
+            "probe must stay below the FP16-KV capacity ceiling"
+        )
+        assert cfg.workload_params["num_requests"] == {1: 24, 8: 64}[cfg.concurrency]
+    assert {c.factors.kv_quant for c in probe} == {"fp16", "fp8"}
+
     for cfg in configs:
         assert cfg.block == "k_stress"
-        assert cfg.factors.weight_quant == "fp16"
-        assert cfg.factors.spec_decode == "none"
+        assert cfg.factors.weight_quant in ("fp16", "w4a16")
         assert cfg.workload == "rag_shared_prefix"
         assert cfg.workload_params["prefix_overlap"] == "low"
         assert cfg.workload_params["doc_target_tokens"] == 7400
+        # Phase-3b root-cause fix: tokenizer-exact sizing + hard budget
+        # (8192 max_model_len - 256 max_new_tokens = 7936; 36-token margin).
+        # tokenizer_model is always the canonical base checkpoint -- the AWQ
+        # corners serve a quantized model but share the same tokenizer.
+        assert cfg.workload_params["tokenizer_model"] == "meta-llama/Llama-3.1-8B-Instruct"
+        assert cfg.workload_params["prompt_token_budget"] == 7900
         assert cfg.workload_params["request_timeout_s"] == 1800
         assert cfg.repeat_idx in (0, 1)
         # pinned 40GB card (High-RAM OFF): both KV ceilings (~16 fp16, ~32
         # fp8) sit inside this grid -- see the generator docstring
         assert cfg.gpu_target == "a100_40gb"
-        n = cfg.workload_params["num_requests"]
-        assert n == {8: 64, 16: 96, 32: 160, 48: 192}[cfg.concurrency]
+        if cfg.factors.spec_decode == "none":
+            n = cfg.workload_params["num_requests"]
+            assert n == {8: 64, 16: 96, 32: 160, 48: 192}[cfg.concurrency]
         cmd = VllmAdapter(cfg).build_launch_command()
         if cfg.factors.kv_quant == "fp8":
             assert cmd[cmd.index("--kv-cache-dtype") + 1] == "fp8"
         else:
             assert "--kv-cache-dtype" not in cmd
+        if cfg.factors.weight_quant == "w4a16":
+            assert cmd[cmd.index("--quantization") + 1] == "awq_marlin"
 
 
 def test_k_stress_records_excluded_from_factorial():
@@ -207,3 +306,87 @@ def test_k_stress_report_missing_cells_and_cli(tmp_path):
     assert ks_main([str(tmp_path / "results"), "--pool-tokens", "125000"]) == 0
     assert (tmp_path / "results" / "k_stress_report.md").exists()
     assert ks_main([str(tmp_path / "empty")]) == 1
+
+
+def test_generator_corner_set_flags(tmp_path):
+    import configs.k_stress.generate_k_stress as gen
+
+    # default = everything (the standard Phase-3b session); flags subset,
+    # and regeneration prunes stale files
+    assert gen.main(out_dir=tmp_path) == 40
+    assert gen.main(out_dir=tmp_path, with_w_corners=False,
+                    with_ks_probe=False) == 16
+    assert gen.main(out_dir=tmp_path, with_ks_probe=False) == 32
+    assert gen.main(out_dir=tmp_path, with_w_corners=False) == 24
+    assert len(load_configs([str(tmp_path / "kstress_*.yaml")])) == 24
+
+    gen.main(out_dir=tmp_path)
+    configs = load_configs([str(tmp_path / "kstress_*.yaml")])
+    assert len(group_by_server(configs)) == 6
+    awq = [c for c in configs if c.factors.weight_quant == "w4a16"]
+    assert len(awq) == 16
+    for cfg in awq:
+        assert "AWQ" in cfg.model
+        cmd = VllmAdapter(cfg).build_launch_command()
+        assert cmd[cmd.index("--quantization") + 1] == "awq_marlin"
+
+
+def _probe_record(conc, kv, goodput, tau, repeat=0):
+    return {
+        "run_id": "kstress_eagle3-%s_c%d_r%d" % (kv, conc, repeat),
+        "config": {"block": "k_stress", "workload": "rag_shared_prefix",
+                   "concurrency": conc, "repeat_idx": repeat,
+                   "factors": {"weight_quant": "fp16", "kv_quant": kv,
+                               "spec_decode": "eagle3"}},
+        "env": {}, "status": "ok",
+        "measured": {"goodput_tok_s": goodput, "accepted_length_tau": tau},
+    }
+
+
+def test_ks_probe_separated_from_capacity_table():
+    from analysis.k_stress import collect, collect_ks_probe
+
+    records = _divergence_records() + [
+        _probe_record(8, "fp16", 500, 2.55),
+        _probe_record(8, "fp8", 400, 2.54),
+    ]
+    capacity = collect(records)
+    probe = collect_ks_probe(records)
+    # spec-on cells must NOT leak into the capacity comparison
+    assert all(len(v) == 2 for v in capacity.values())  # 2 repeats, no extras
+    assert set(probe) == {(8, "fp16"), (8, "fp8")}
+
+
+def test_ks_probe_report_section():
+    from analysis.k_stress import collect, collect_ks_probe
+
+    records = _divergence_records() + [
+        _probe_record(1, "fp16", 170, 2.52),
+        _probe_record(1, "fp8", 130, 2.51),
+        _probe_record(8, "fp16", 500, 2.55),
+        _probe_record(8, "fp8", 425, 2.54),
+    ]
+    report = render_report(collect(records), probe_cells=collect_ks_probe(records))
+    assert "KS long-context probe" in report
+    assert "(x0.76)" in report            # 130/170 K-under-S at c1, long ctx
+    assert "2.52 / 2.51" in report        # tau invariance visible
+    assert "(x0.85)" in report            # 425/500 at c8
+    # K-solo comparison column pulled from the capacity cells at conc 8
+    assert "x0.97" in report              # 680/700 from _divergence_records
+
+
+def test_w_corner_report_section():
+    from analysis.k_stress import collect, collect_w_corners
+
+    records = _divergence_records()
+    for r in (0, 1):
+        for kv, batch in (("fp16", 26.0), ("fp8", 31.5)):
+            rec = _ks_record(32, kv, 1600, batch, 0.8, 0, repeat=r)
+            rec["config"]["factors"]["weight_quant"] = "w4a16"
+            rec["run_id"] = "kstress_w4a16-%s_c32_r%d" % (kv, r)
+            records.append(rec)
+    w_cells = collect_w_corners(records)
+    assert set(w_cells) == {(32, "fp16"), (32, "fp8")}
+    report = render_report(collect(records), w_cells=w_cells)
+    assert "W capacity channel" in report
+    assert "26.0 / 27" in report  # AWQ fp16kv batch mean/max at conc 32

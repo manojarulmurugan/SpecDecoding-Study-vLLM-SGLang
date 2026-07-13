@@ -32,14 +32,48 @@ from harness.results import ResultsStore
 
 
 def collect(records: List[Dict[str, Any]]) -> Dict[Tuple[int, str], List[Dict[str, Any]]]:
-    """-> {(concurrency, kv_quant): [measured, ...]} across repeats."""
+    """Capacity cells: {(concurrency, kv_quant): [measured, ...]} across
+    repeats. Spec-on cells belong to the KS probe (collect_ks_probe), not
+    here -- mixing them would contaminate the capacity comparison."""
     out: Dict[Tuple[int, str], List[Dict[str, Any]]] = defaultdict(list)
     for rec in records:
         cfg = rec.get("config", {})
         if cfg.get("block") != "k_stress" or rec.get("status") != "ok":
             continue
+        if cfg["factors"].get("spec_decode", "none") != "none":
+            continue
+        if cfg["factors"].get("weight_quant", "fp16") != "fp16":
+            continue  # W corners get their own comparison, not this table
         key = (int(cfg["concurrency"]), cfg["factors"]["kv_quant"])
         out[key].append(rec["measured"])
+    return dict(out)
+
+
+def collect_w_corners(records: List[Dict[str, Any]]) -> Dict[Tuple[int, str], List[Dict[str, Any]]]:
+    """AWQ capacity cells: {(concurrency, kv_quant): [measured, ...]}."""
+    out: Dict[Tuple[int, str], List[Dict[str, Any]]] = defaultdict(list)
+    for rec in records:
+        cfg = rec.get("config", {})
+        if cfg.get("block") != "k_stress" or rec.get("status") != "ok":
+            continue
+        if cfg["factors"].get("spec_decode", "none") != "none":
+            continue
+        if cfg["factors"].get("weight_quant") != "w4a16":
+            continue
+        out[(int(cfg["concurrency"]), cfg["factors"]["kv_quant"])].append(rec["measured"])
+    return dict(out)
+
+
+def collect_ks_probe(records: List[Dict[str, Any]]) -> Dict[Tuple[int, str], List[Dict[str, Any]]]:
+    """Long-context K-under-S cells: {(concurrency, kv_quant): [measured]}."""
+    out: Dict[Tuple[int, str], List[Dict[str, Any]]] = defaultdict(list)
+    for rec in records:
+        cfg = rec.get("config", {})
+        if cfg.get("block") != "k_stress" or rec.get("status") != "ok":
+            continue
+        if cfg["factors"].get("spec_decode", "none") == "none":
+            continue
+        out[(int(cfg["concurrency"]), cfg["factors"]["kv_quant"])].append(rec["measured"])
     return dict(out)
 
 
@@ -58,9 +92,92 @@ def _agg(measures: List[Dict[str, Any]], key: str, sub: Optional[str] = None) ->
     return _mean(values)
 
 
+def render_w_corner_section(
+    w_cells: Dict[Tuple[int, str], List[Dict[str, Any]]]
+) -> List[str]:
+    if not w_cells:
+        return []
+    lines = ["## W capacity channel (AWQ weights, no spec)", ""]
+    lines.append(
+        "AWQ frees ~10.4GB of weight memory -> larger KV pool -> higher "
+        "sustainable concurrency at the SAME kv dtype. Compare batch/kv-usage "
+        "against the FP16-weights table above."
+    )
+    lines.append("")
+    lines.append("| conc | goodput fp16kv | goodput fp8kv | batch fp16kv mean/max "
+                 "| batch fp8kv mean/max | kv-usage max | preemptions |")
+    lines.append("|" + "---|" * 7)
+    for conc in sorted({k[0] for k in w_cells}):
+        f16 = w_cells.get((conc, "fp16"), [])
+        f8 = w_cells.get((conc, "fp8"), [])
+        if not f16 or not f8:
+            continue
+        lines.append(
+            "| %d | %.0f | %.0f | %.1f / %.0f | %.1f / %.0f | %s / %s | %s / %s |"
+            % (
+                conc,
+                _agg(f16, "goodput_tok_s") or 0, _agg(f8, "goodput_tok_s") or 0,
+                _agg(f16, "emergent_batch_size", "mean") or 0,
+                _agg(f16, "emergent_batch_size", "max") or 0,
+                _agg(f8, "emergent_batch_size", "mean") or 0,
+                _agg(f8, "emergent_batch_size", "max") or 0,
+                "%.2f" % (_agg(f16, "kv_cache_usage", "max") or 0),
+                "%.2f" % (_agg(f8, "kv_cache_usage", "max") or 0),
+                "%.0f" % (_agg(f16, "num_preemptions") or 0),
+                "%.0f" % (_agg(f8, "num_preemptions") or 0),
+            )
+        )
+    lines.append("")
+    return lines
+
+
+def render_ks_probe_section(
+    probe: Dict[Tuple[int, str], List[Dict[str, Any]]],
+    capacity: Dict[Tuple[int, str], List[Dict[str, Any]]],
+) -> List[str]:
+    if not probe:
+        return []
+    lines = ["## KS long-context probe (EAGLE-3 on, ~7.4k-token contexts)", ""]
+    lines.append(
+        "K-toggle-under-S at long context, same hardware/kernels as the "
+        "factorial's short-context KS. Short-context reference (factorial "
+        "@ c1, ~1k contexts): K-under-S ~x0.63, K-solo x0.94, tau invariant. "
+        "If the long-context ratio here is materially higher than x0.63, "
+        "context length buys back bandwidth credit; if it matches, the "
+        "emulation tax dominates regardless of context."
+    )
+    lines.append("")
+    lines.append("| conc | goodput S+fp16kv | S+fp8kv (K-under-S ratio) | "
+                 "tau fp16kv/fp8kv | K-solo ratio same conc (long ctx) |")
+    lines.append("|" + "---|" * 5)
+    for conc in sorted({k[0] for k in probe}):
+        f16 = probe.get((conc, "fp16"), [])
+        f8 = probe.get((conc, "fp8"), [])
+        if not f16 or not f8:
+            continue
+        g16, g8 = _agg(f16, "goodput_tok_s"), _agg(f8, "goodput_tok_s")
+        solo16 = _agg(capacity.get((conc, "fp16"), []), "goodput_tok_s")
+        solo8 = _agg(capacity.get((conc, "fp8"), []), "goodput_tok_s")
+        solo = ("x%.2f" % (solo8 / solo16)) if solo16 and solo8 else "—"
+        lines.append(
+            "| %d | %.0f | %.0f (x%.2f) | %.2f / %.2f | %s |"
+            % (
+                conc, g16 or 0, g8 or 0,
+                (g8 / g16) if g16 and g8 else 0,
+                _agg(f16, "accepted_length_tau") or 0,
+                _agg(f8, "accepted_length_tau") or 0,
+                solo,
+            )
+        )
+    lines.append("")
+    return lines
+
+
 def render_report(
     cells: Dict[Tuple[int, str], List[Dict[str, Any]]],
     pool_tokens: Optional[int] = None,
+    w_cells: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None,
+    probe_cells: Optional[Dict[Tuple[int, str], List[Dict[str, Any]]]] = None,
 ) -> str:
     concurrencies = sorted({k[0] for k in cells})
     lines = ["# K-stress addendum: FP8-KV under capacity pressure", ""]
@@ -144,11 +261,13 @@ def render_report(
         lines.append("## Regime per concurrency (FP16-KV)")
         lines += verdicts
         lines.append("")
+    lines += render_w_corner_section(w_cells or {})
+    lines += render_ks_probe_section(probe_cells or {}, cells)
     if missing:
         lines.append("## Missing cells")
         lines += ["- %s" % m for m in missing]
         lines.append("")
-    if not cells:
+    if not cells and not (w_cells or probe_cells):
         lines.append("NO DATA: no completed k_stress records found.")
         lines.append("")
     return "\n".join(lines)
@@ -164,13 +283,18 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     store = ResultsStore(args.results_dir)
-    cells = collect(store.load_all())
-    report = render_report(cells, pool_tokens=args.pool_tokens)
+    records = store.load_all()
+    cells = collect(records)
+    report = render_report(
+        cells, pool_tokens=args.pool_tokens,
+        w_cells=collect_w_corners(records),
+        probe_cells=collect_ks_probe(records),
+    )
     print(report)
     out = args.out or str(Path(args.results_dir) / "k_stress_report.md")
     Path(out).write_text(report)
     print("[k_stress] report written to %s" % out)
-    return 0 if cells else 1
+    return 0 if (cells or collect_w_corners(records) or collect_ks_probe(records)) else 1
 
 
 if __name__ == "__main__":

@@ -1,33 +1,37 @@
-"""Generate the K-stress addendum cells: does FP8-KV relieve KV-cache
-CAPACITY pressure? (Phase-3 addendum; redesigned for a pinned A100-40GB.)
+"""Generate the K-stress addendum cells (Phase-3b, pinned A100-40GB).
 
 Phase 2's K marginal was ~flat (0.94-1.03x) -- a real null for its regime:
-demand peaked at ~18% of the KV pool, so K's capacity channel never engaged.
-These cells create the pressure deliberately: unique ~7.4k-token documents
-(prefix_overlap=low -- nothing shareable), FP16 weights, no spec decode.
+demand peaked at ~18% of the KV pool. These cells create capacity pressure
+deliberately (unique ~7.4k-token documents, prefix_overlap=low) and, since
+the Phase-3 audit + KS-probe design review, carry three corner sets:
 
-CARD CHOICE (2026-07-09): Colab's High-RAM toggle pins the A100 variant
-(off = 40GB, on = 80GB -- PREREQ_RESULTS Check 1). This experiment targets
-the **40GB card (High-RAM OFF)** because both ceilings then fit inside a
-small grid:
+1. K-isolation pair (fp16kv / fp8kv; FP16 weights, no spec) x conc
+   {8,16,32,48} x 2 repeats = 16 cells. Ceilings on 40GB (~120-135k-token
+   FP16-KV pool, ~7.7k-token contexts): FP16-KV ~16 concurrent, FP8-KV ~32.
+   The below-ceiling conc-8 cells double as the LONG-CONTEXT K-SOLO
+   measurement for the KS decomposition (see 3).
+2. --w-corners: AWQ pair (w4a16-fp16kv / w4a16-fp8kv) -- W's own capacity
+   channel: AWQ frees ~10.4GB of weight memory -> ~205k-token FP16-KV pool
+   -> ceiling ~26 vs ~16. Untested by anything else (Phase-3 audit).
+3. --ks-probe: EAGLE-3 pair (eagle3-fp16kv / eagle3-fp8kv) x conc {1,8}
+   x 2 repeats = 8 cells. The long-context K-under-S measurement: the
+   factorial found KS strongly negative at SHORT context (K-toggle-under-S
+   ~x0.63 at c1) with tau invariant; this probe re-measures the same
+   contrast at 7.4k-token context on identical hardware/kernels. Together
+   with (1)'s conc-8 K-solo cells and the factorial's short-context cells
+   it completes the 2x2 (K-solo/K-under-S x short/long context) grid that
+   decomposes emulation tax vs bandwidth credit without needing an H100.
+   Concurrency capped at 8: the probe must stay BELOW the capacity ceiling
+   or capacity effects contaminate the economics comparison.
 
-  pool ~= 0.85*40GB - ~16GB weights - overhead ~= 15-17 GB
-       ~= ~120-135k FP16-KV tokens (128 KiB/token) or ~2x that under FP8
-  per-request context ~= 7.4k prompt + 256 output ~= 7.7k tokens
-  -> FP16-KV ceiling ~= 16 concurrent requests; FP8-KV ~= 32
+ALL sets are emitted by default (the standard Phase-3b session runs
+everything); --no-w-corners / --no-ks-probe subset. The generator deletes
+stale kstress_*.yaml first, so regenerating with subset flags prunes files.
 
-Grid: {FP16-KV, FP8-KV} x concurrency {8, 16, 32, 48} x 2 repeats = 16
-cells, 2 launches. Each level has a job:
-  8  = below both ceilings (the Phase-2 null must reproduce here)
-  16 = ON the predicted FP16 knee
-  32 = FP16 saturated, ON the predicted FP8 knee (max divergence)
-  48 = beyond both -- FP8's own plateau at ~2x FP16's is the money shot
-       the 80GB design could never show inside a sane concurrency range.
+Card choice: 40GB / Colab High-RAM OFF (the toggle pins the variant,
+PREREQ_RESULTS Check 1). Cube/factorial sessions are the opposite (80GB).
 Predictions are checked against the actual pool the server logs at startup
 ("GPU KV cache size: N tokens"); env.gpu_name is recorded per run.
-
-The cube/factorial sessions are the opposite: they must run High-RAM ON
-(80GB) to match the card Phase 2's marginal corners were measured on.
 
 Run from the repo root:  python3 configs/k_stress/generate_k_stress.py
 """
@@ -36,10 +40,33 @@ from __future__ import annotations
 import pathlib
 
 BASE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+AWQ_MODEL = "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
+EAGLE3_DRAFT = "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B"
 
-CONCURRENCY_REQUESTS = {8: 64, 16: 96, 32: 160, 48: 192}
-REPEATS = (0, 1)  # large predicted effect; 2 repeats suffice (design review)
-KV = {"fp16kv": "fp16", "fp8kv": "fp8"}
+REPEATS = (0, 1)  # large predicted effects; 2 repeats suffice (design review)
+
+CAPACITY_CONCURRENCY_REQUESTS = {8: 64, 16: 96, 32: 160, 48: 192}
+PROBE_CONCURRENCY_REQUESTS = {1: 24, 8: 64}  # below-ceiling only
+
+# tag -> (weight_quant, model, kv_quant, spec_decode, draft, conc_requests)
+K_CORNERS = {
+    "fp16kv": ("fp16", BASE_MODEL, "fp16", "none", None,
+               CAPACITY_CONCURRENCY_REQUESTS),
+    "fp8kv": ("fp16", BASE_MODEL, "fp8", "none", None,
+              CAPACITY_CONCURRENCY_REQUESTS),
+}
+W_CORNERS = {
+    "w4a16-fp16kv": ("w4a16", AWQ_MODEL, "fp16", "none", None,
+                     CAPACITY_CONCURRENCY_REQUESTS),
+    "w4a16-fp8kv": ("w4a16", AWQ_MODEL, "fp8", "none", None,
+                    CAPACITY_CONCURRENCY_REQUESTS),
+}
+KS_PROBE_CORNERS = {
+    "eagle3-fp16kv": ("fp16", BASE_MODEL, "fp16", "eagle3", EAGLE3_DRAFT,
+                      PROBE_CONCURRENCY_REQUESTS),
+    "eagle3-fp8kv": ("fp16", BASE_MODEL, "fp8", "eagle3", EAGLE3_DRAFT,
+                     PROBE_CONCURRENCY_REQUESTS),
+}
 
 TEMPLATE = """\
 # K-stress addendum cell, generated by configs/k_stress/generate_k_stress.py.
@@ -49,15 +76,21 @@ block: k_stress
 engine: vllm
 model: {model}
 factors:
-  weight_quant: fp16
+  weight_quant: {weight}
   kv_quant: {kv}
-  spec_decode: none
-workload: rag_shared_prefix
+  spec_decode: {spec}
+{draft_line}workload: rag_shared_prefix
 workload_params:
   num_requests: {n}
   max_new_tokens: 256
   prefix_overlap: low
   doc_target_tokens: 7400
+  # Tokenizer-exact doc sizing + hard prompt budget (Phase-3b root-cause
+  # fix): word-approximated sizing let ~10% of docs overshoot
+  # max_model_len - max_new_tokens (7936) and draw 400s from vLLM.
+  # Budget 7900 = 7936 minus BOS + round-trip jitter margin.
+  tokenizer_model: meta-llama/Llama-3.1-8B-Instruct
+  prompt_token_budget: 7900
   request_timeout_s: 1800
   spec_bench_file: external/Spec-Bench/data/spec_bench/question.jsonl
 concurrency: {conc}
@@ -76,22 +109,39 @@ engine_args:
 """
 
 
-def main() -> None:
-    out_dir = pathlib.Path(__file__).parent
+def main(out_dir=None, with_w_corners=True, with_ks_probe=True) -> int:
+    out_dir = pathlib.Path(out_dir) if out_dir else pathlib.Path(__file__).parent
     for stale in out_dir.glob("kstress_*.yaml"):
         stale.unlink()
+    corners = dict(K_CORNERS)
+    if with_w_corners:
+        corners.update(W_CORNERS)
+    if with_ks_probe:
+        corners.update(KS_PROBE_CORNERS)
     count = 0
-    for tag, kv in KV.items():
-        for conc, n in CONCURRENCY_REQUESTS.items():
+    for tag, (weight, model, kv, spec, draft, conc_requests) in corners.items():
+        for conc, n in conc_requests.items():
             for repeat in REPEATS:
                 text = TEMPLATE.format(
-                    model=BASE_MODEL, kv=kv, n=n, conc=conc, repeat=repeat,
+                    model=model, weight=weight, kv=kv, spec=spec,
+                    draft_line=("draft_model: %s\n" % draft) if draft else "",
+                    n=n, conc=conc, repeat=repeat,
                 )
                 name = "kstress_%s_c%d_r%d.yaml" % (tag, conc, repeat)
                 (out_dir / name).write_text(text)
                 count += 1
     print("wrote %d configs to %s" % (count, out_dir))
+    return count
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--no-w-corners", action="store_true",
+                        help="omit the AWQ capacity-channel corners")
+    parser.add_argument("--no-ks-probe", action="store_true",
+                        help="omit the long-context K-under-S probe corners")
+    args = parser.parse_args()
+    main(with_w_corners=not args.no_w_corners,
+         with_ks_probe=not args.no_ks_probe)
