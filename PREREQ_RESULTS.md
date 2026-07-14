@@ -390,3 +390,41 @@ confound, request-count scaling, SGLang seam reframing, reproduction-gate tolera
 interference gap, free correctness test, APC pinning) plus this session's Check 6 findings
 (pinned engine version, awq_marlin, FP8 calibration note) have now been applied to
 EXPERIMENT_MATRIX.md and HARNESS_SPEC.md — specs are current as of 2026-07-06.
+
+---
+
+## 2026-07-14/15 — Xet CDN 403 root-caused: edge-specific, not transient; automatic curl fallback added
+
+The "wait a few hours" call in the original incident note was falsified: the failure ran
+14+ hours with HF's status page green the whole time. Live probing from a second network
+explained both facts at once. The same file (identical content hash
+`3f45696c938b...`, `hugging-quants/...AWQ-INT4` shard 1) is served by **two different
+edges with two different signing keys** depending on how the hub routes the client:
+
+- **hf-client route (what Colab hits):** hub issues presigned URLs on
+  `us.gcp.cdn.hf.co/xet-bridge-us` with `Key-Pair-Id=01KXEF4KZ...` → the edge rejects
+  its own hub's key: `403 SignatureError: invalid key pair id`. Every retry gets a fresh
+  ticket signed with the same broken key, so retries can never succeed.
+- **browser-UA route:** plain `/<repo>/resolve/main/<file>` with `-A "Mozilla/5.0"` is
+  302'd to `cas-bridge.xethub.hf.co` with `Key-Pair-Id=K3EPXBYC3CKDRZ` (AWS-side) →
+  **serves bytes** (verified with a range GET during the outage).
+
+Corollaries: (a) user token/keys are irrelevant — the hub authenticates fine and the
+failing key is HF's CDN signing key, and tiny public files (`logo.png`) 403 identically;
+(b) the status page stays green because only one route is broken; (c) geography of the
+person is irrelevant — routing is decided per client/UA at the hub.
+
+Two cache-layout facts verified against live headers (they make a faithful fallback
+possible): on resolve URLs, `x-linked-etag` == the **LFS sha256** for LFS files and the
+**git blob oid** for regular files — exactly the blob filenames huggingface_hub uses
+under `blobs/`; `/api/models/<repo>/tree/main?recursive=true` reports both oids plus
+exact sizes, and `/api/models/<repo>/revision/main` gives the commit sha.
+
+**Mitigation (in repo, GPU-free tested):** `scripts/predownload.py` now auto-falls-back
+when the hf CLI exhausts its attempts: it curls the hub API for the tree + sha (browser
+UA — load-bearing), downloads every file through the healthy edge with per-file exact
+size verification and resumable `.part` files, and reconstructs the standard HF cache
+(`blobs/<etag>` + `snapshots/<sha>/` symlinks + `refs/main`). vLLM's hub lookups then
+find complete blobs and never GET the broken CDN route. `--curl-only` skips the doomed
+hf attempts entirely (~10 min/repo saved while the incident lasts). 8 new tests in
+`tests/test_predownload.py` (155 total passing).

@@ -67,21 +67,24 @@ naive-product-of-marginals minus measured full stack.
 7. **env.attention_backend is recorded per run** (FP8-KV historically
    selects FlashInfer; FP16-KV picks FlashAttention).
 
-## Immediate blocker (2026-07-14): HF Xet CDN signature failure
+## Immediate blocker (2026-07-14): HF Xet CDN signature failure — ROUTED AROUND
 
 Cold downloads of large files fail with `403 SignatureError: invalid key
-pair id` from `us.gcp.cdn.hf.co/xet-bridge-us/...` presigned URLs — across
-unrelated repos, with valid auth, disk, and egress (evidence chain in
-colab/archive_phase3b_xet_debug_20260714.ipynb). `pip uninstall hf-xet` did
-NOT fix it (URLs are hub-issued; the hub is fully xet-backed) —
-conclusion: HF-side infra, transient. Meanwhile a browser-UA curl through
-plain `huggingface.co/<repo>/resolve/main/<file>` succeeded via the healthy
-`cas-bridge.xethub.hf.co` edge (manual fallback if desperate).
-Mitigation in repo: `scripts/predownload.py` (retries + backoff + hard
-per-attempt timeout + loud failure; called by cell 4b in both runbooks);
-HF_HUB_DISABLE_XET=1 set belt-and-braces (known ineffective for hub-side
-routing). If downloads still fail: wait hours and retry — do not sink more
-time client-side.
+pair id` from `us.gcp.cdn.hf.co/xet-bridge-us/...` presigned URLs (evidence
+chain in colab/archive_phase3b_xet_debug_20260714.ipynb). Root-caused after
+14h disproved "transient" (full analysis: PREREQ 2026-07-14/15 entry): the
+hub routes hf-client requests to the GCP edge whose signing key is broken,
+while browser-UA requests to plain resolve URLs are 302'd to the healthy
+`cas-bridge.xethub.hf.co` edge — retries on the hf route can never succeed
+(each fresh ticket is signed with the same broken key), user tokens are
+irrelevant, and the status page stays green because only one route is down.
+Mitigation in repo: `scripts/predownload.py` now AUTO-falls-back to
+browser-UA curls of resolve URLs and reconstructs the standard HF cache
+layout (blobs/<etag> + snapshot symlinks + refs/main; etag mapping verified
+against live headers), size-verified per file, resumable. `--curl-only`
+skips the doomed hf attempts while the incident lasts. GPU-free tested
+(tests/test_predownload.py, 155 total). Cell 4b unchanged in usage;
+UNBLOCKED pending the user's next 40GB session.
 
 ## Working norms
 
