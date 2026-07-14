@@ -124,6 +124,23 @@ failed 40GB session, both now fixed in code (`harness/engines/base.py`,
   Bug-B teardown fix works under fire: after the watchdog kill, the GPU was actually
   released and the next group launched cleanly.
 
+**External-dependency risk: HF Xet CDN outage (2026-07-14, fully diagnosed).** Cold
+downloads of large files (model shards; even an unrelated .gif in the EAGLE3 repo)
+failed with `403 Forbidden ... SignatureError: invalid key pair id` on hub-issued
+presigned URLs (`us.gcp.cdn.hf.co/xet-bridge-us/...`, `Key-Pair-Id=01KXEF...`).
+Evidence chain (transcript: `colab/archive_phase3b_xet_debug_20260714.ipynb`): disk,
+auth/gating, and raw egress all ruled out (a browser-UA curl of a 548MB file through
+plain `resolve/main` succeeded via the healthy `cas-bridge.xethub.hf.co` edge);
+`HF_HUB_DISABLE_XET=1` ineffective (known bug, huggingface_hub#3266); **`pip uninstall
+hf-xet` also ineffective** — the broken URLs are issued by the hub itself (the Hub is
+fully Xet-backed server-side), so no client-side change can fix a hub signing-key
+mismatch. Verdict: transient HF infrastructure; wait and retry, never debug client-side
+again. Mitigation now standard: both runbooks pre-download via `scripts/predownload.py`
+(hard 30-min per-attempt timeout, 3 attempts with backoff, loud failure naming this
+incident and the curl fallback) instead of a bare `hf download` that sits silent. Small
+silver lining: small-file metadata downloads kept working, so gating/auth checks pass
+even mid-outage — don't let that mislead a future diagnosis.
+
 Check 1 status: **DONE.** Burn rate calibrated from two independent real sessions
 (Block-0 single-stream, Phase-2 full concurrency sweep); H100 unreliability documented;
 A100 variant selection resolved (High-RAM toggle, above).
