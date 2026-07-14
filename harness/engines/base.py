@@ -31,6 +31,34 @@ from ..config import RunConfig
 from ..metrics import parse_prometheus_text
 
 
+def hf_cache_size() -> int:
+    """Total bytes under the HF hub cache.
+
+    Empirically verified (2026-07-12): huggingface_hub's tqdm progress bars
+    auto-disable when stdout is not a tty, so a server whose output is
+    redirected to a log file writes NOTHING during a cold weight download --
+    but in-flight downloads land in the cache as blobs/*.incomplete, so
+    cache size grows continuously. This is the watchdog's second activity
+    signal: a genuine wedge (Phase-3b Bug A) had log AND cache both frozen.
+    """
+    root = (
+        os.environ.get("HF_HUB_CACHE")
+        or os.path.join(
+            os.environ.get("HF_HOME")
+            or os.path.join(os.path.expanduser("~"), ".cache", "huggingface"),
+            "hub",
+        )
+    )
+    total = 0
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            try:
+                total += os.stat(os.path.join(dirpath, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
 def gpu_compute_pids() -> Optional[List[str]]:
     """PIDs currently holding GPU compute contexts, or None when nvidia-smi
     is unavailable (GPU-less dev machines)."""
@@ -112,17 +140,20 @@ class EngineAdapter(ABC):
                    log=print) -> None:
         """Poll /health until the server answers.
 
-        Two failure modes, distinguished deliberately:
+        Failure modes, distinguished deliberately:
         - process exit -> immediate failure with log tail;
-        - STALL (process alive, no health, server log not growing for
-          ``stall_timeout_s``) -> early failure instead of burning the full
-          timeout. Weight downloads and startup phases write progress to the
-          log, so a genuinely silent 10 minutes means wedged, not slow
-          (Phase-3b Bug A sat silent for 40+ minutes at idle power).
+        - STALL: process alive, no /health, AND *both* activity signals
+          frozen for ``stall_timeout_s``: the server log AND the HF cache
+          size. The second signal is essential: tqdm auto-disables on
+          non-tty stdout, so a cold ~16GB weight download writes NOTHING to
+          the redirected log while the cache grows for many minutes
+          (empirically verified 2026-07-12, after the watchdog's first
+          version false-positive-killed a cold-cache launch). The genuine
+          Phase-3b Bug-A wedge had log and cache both static at idle power.
         """
         deadline = time.monotonic() + timeout_s
-        last_size = -1
-        last_growth = time.monotonic()
+        last_fingerprint = None
+        last_activity = time.monotonic()
         while time.monotonic() < deadline:
             if handle.process is not None and handle.process.poll() is not None:
                 raise RuntimeError(
@@ -137,16 +168,18 @@ class EngineAdapter(ABC):
                 pass
             if handle.log_path is not None:
                 try:
-                    size = Path(handle.log_path).stat().st_size
+                    log_size = Path(handle.log_path).stat().st_size
                 except OSError:
-                    size = -1
-                if size != last_size:
-                    last_size = size
-                    last_growth = time.monotonic()
-                elif time.monotonic() - last_growth > stall_timeout_s:
+                    log_size = -1
+                fingerprint = (log_size, hf_cache_size())
+                if fingerprint != last_fingerprint:
+                    last_fingerprint = fingerprint
+                    last_activity = time.monotonic()
+                elif time.monotonic() - last_activity > stall_timeout_s:
                     raise RuntimeError(
-                        "server STALLED: alive but log unchanged for %.0fs "
-                        "and no /health%s"
+                        "server STALLED: alive but no /health, and log + HF "
+                        "cache both unchanged for %.0fs (an active download "
+                        "would grow the cache)%s"
                         % (stall_timeout_s, self._log_tail(handle))
                     )
             time.sleep(poll_s)

@@ -125,7 +125,8 @@ def test_launch_without_env_inherits_environment(tmp_path, monkeypatch):
 
 # -- Bug A: stall watchdog ---------------------------------------------------------
 
-def test_wait_ready_fails_fast_on_stalled_log(tmp_path):
+def test_wait_ready_fails_fast_when_log_and_cache_both_frozen(tmp_path, monkeypatch):
+    monkeypatch.setattr(base_mod, "hf_cache_size", lambda: 12345)  # frozen
     proc = subprocess.Popen(["/bin/sh", "-c", "sleep 60"], start_new_session=True)
     log_path = tmp_path / "server.log"
     log_path.write_text("+ vllm serve ...\nUsing FlashAttention version 2\n")
@@ -137,6 +138,39 @@ def test_wait_ready_fails_fast_on_stalled_log(tmp_path):
                                   stall_timeout_s=0.5, log=lambda *_: None)
     finally:
         _adapter().teardown(handle, log=lambda *_: None)
+
+
+def test_wait_ready_tolerates_silent_log_during_active_download(tmp_path, monkeypatch):
+    """The false-positive scenario from the 2026-07-12 bug report: tqdm is
+    silent on non-tty stdout, so a cold weight download produces a frozen
+    log -- but the HF cache grows. A growing cache must keep the watchdog
+    quiet; the wait then ends in the ordinary TimeoutError, never STALLED."""
+    ticks = iter(range(10_000))
+    monkeypatch.setattr(base_mod, "hf_cache_size", lambda: next(ticks))
+    proc = subprocess.Popen(["/bin/sh", "-c", "sleep 60"], start_new_session=True)
+    log_path = tmp_path / "server.log"
+    log_path.write_text("Loading model from scratch...\n")  # then silence
+    handle = ServerHandle(process=proc, base_url="http://127.0.0.1:9",
+                          log_path=log_path, pgid=proc.pid)
+    try:
+        with pytest.raises(TimeoutError, match="not ready"):
+            _adapter().wait_ready(handle, timeout_s=2, poll_s=0.05,
+                                  stall_timeout_s=0.3, log=lambda *_: None)
+    finally:
+        _adapter().teardown(handle, log=lambda *_: None)
+
+
+def test_hf_cache_size_walks_the_hub_cache(tmp_path, monkeypatch):
+    from harness.engines.base import hf_cache_size
+
+    hub = tmp_path / "hub" / "models--x" / "blobs"
+    hub.mkdir(parents=True)
+    (hub / "abc123").write_bytes(b"x" * 1000)
+    (hub / "def456.incomplete").write_bytes(b"y" * 500)  # in-flight download
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hub"))
+    assert hf_cache_size() == 1500
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "missing"))
+    assert hf_cache_size() == 0
 
 
 def test_wait_ready_reports_process_exit(tmp_path):

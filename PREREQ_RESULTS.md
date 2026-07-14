@@ -102,12 +102,27 @@ failed 40GB session, both now fixed in code (`harness/engines/base.py`,
   stalled once at launch (log frozen after backend selection, 0% util, idle power) at a
   command byte-identical to one that served 36 factorial cells on 80GB — so workload/
   context is ruled out; suspected transient init/download stall or 40GB-specific flake
-  (one occurrence, unconfirmed). `wait_ready` now fails after 600s of zero log growth
-  instead of burning the full 2400s; each record captures the selected attention backend
-  from the server log (`env.attention_backend`) since FP8-KV historically selects
-  FlashInfer while FP16-KV picks FlashAttention — making backend a recorded variable,
-  not a guess. Retry ladder for the parked corner is documented in
+  (one occurrence, unconfirmed). `wait_ready` now fails a wedged launch early instead of
+  burning the full 2400s; each record captures the selected attention backend from the
+  server log (`env.attention_backend`) since FP8-KV historically selects FlashInfer
+  while FP16-KV picks FlashAttention — making backend a recorded variable, not a guess.
+  Retry ladder for the parked corner is documented in
   `configs/k_stress/generate_k_stress.py` (rung 2: pin `VLLM_ATTENTION_BACKEND`).
+- **Correction (2026-07-12): the watchdog's first version had a false-positive mode,
+  caught on the next fresh session.** Its assumption — "weight downloads write progress
+  to the server log" — is WRONG: huggingface_hub's tqdm auto-disables on non-tty stdout,
+  so a cold ~16GB download writes *nothing* to a redirected log while it runs
+  (empirically verified: a real download grew the HF cache 28KB→344MB over ~9s with the
+  log frozen at 156 bytes). The single-signal watchdog killed a perfectly healthy
+  cold-cache launch of the plainest config in the study after 600 silent seconds. Fix,
+  two layers: (1) the watchdog now requires BOTH the server log AND the HF hub cache
+  size to be frozen for 600s before declaring a stall — the genuine Bug-A wedge had both
+  static, an active download grows the cache continuously, so detection is preserved
+  without the false positive; (2) both Phase-3 runbooks pre-download all checkpoints
+  (`hf download`, visible progress) before any server launch, so in-sweep cold caches
+  don't occur in normal operation anyway. Incidentally, the failed session confirmed the
+  Bug-B teardown fix works under fire: after the watchdog kill, the GPU was actually
+  released and the next group launched cleanly.
 
 Check 1 status: **DONE.** Burn rate calibrated from two independent real sessions
 (Block-0 single-stream, Phase-2 full concurrency sweep); H100 unreliability documented;
