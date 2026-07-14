@@ -62,6 +62,10 @@ class EngineArgs:
     # (correct for the YudiZh GPTQ checkpoints). Set explicitly to override.
     quantization: Optional[str] = None
     num_speculative_tokens: int = 5
+    # Extra environment variables for the server process (e.g.
+    # VLLM_ATTENTION_BACKEND to pin the attention backend). Recorded
+    # verbatim; part of the server signature like every launch input.
+    env: Dict[str, str] = field(default_factory=dict)
     # Escape hatch for flags the schema doesn't model; recorded verbatim.
     extra: List[str] = field(default_factory=list)
 

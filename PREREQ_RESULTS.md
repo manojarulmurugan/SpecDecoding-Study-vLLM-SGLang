@@ -89,6 +89,26 @@ consequences, applied to the runbooks:
   could only show FP16 plateauing (~47) while FP8 "keeps tracking" (its ~94 ceiling
   escapes any sane grid).
 
+**Phase-3b session learnings (2026-07-11, Bugs A/B):** two harness-hardening facts from a
+failed 40GB session, both now fixed in code (`harness/engines/base.py`,
+`tests/test_engine_lifecycle.py`):
+- **vLLM V1 servers must be killed as a process GROUP.** The engine spawns a separate
+  EngineCore child; terminating only the launched pid orphans it holding ~16GB of GPU
+  memory, and every later launch in the session then fails with a generic "Engine core
+  initialization failed". Teardown now signals the whole group (TERM→KILL escalation +
+  final sweep), verifies release via `nvidia-smi --query-compute-apps`, and `launch()`
+  refuses to start on an occupied GPU with the offending PIDs named.
+- **A wedged launch is distinguishable from a slow one.** The eagle3-fp16kv corner
+  stalled once at launch (log frozen after backend selection, 0% util, idle power) at a
+  command byte-identical to one that served 36 factorial cells on 80GB — so workload/
+  context is ruled out; suspected transient init/download stall or 40GB-specific flake
+  (one occurrence, unconfirmed). `wait_ready` now fails after 600s of zero log growth
+  instead of burning the full 2400s; each record captures the selected attention backend
+  from the server log (`env.attention_backend`) since FP8-KV historically selects
+  FlashInfer while FP16-KV picks FlashAttention — making backend a recorded variable,
+  not a guess. Retry ladder for the parked corner is documented in
+  `configs/k_stress/generate_k_stress.py` (rung 2: pin `VLLM_ATTENTION_BACKEND`).
+
 Check 1 status: **DONE.** Burn rate calibrated from two independent real sessions
 (Block-0 single-stream, Phase-2 full concurrency sweep); H100 unreliability documented;
 A100 variant selection resolved (High-RAM toggle, above).

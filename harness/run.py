@@ -122,10 +122,14 @@ def execute_run(
 
     n_err = measured["num_errors"]
     status = "ok" if n_err == 0 else ("partial" if n_err < len(items) else "failed")
+    env = collect_env(engine_version=adapter.server_version(handle))
+    # Backend selection differs by config (FP8-KV has historically selected
+    # FlashInfer while FP16-KV picks FlashAttention); record it as data.
+    env["attention_backend"] = adapter.detect_attention_backend(handle)
     record: Dict[str, Any] = {
         "run_id": config.run_id,
         "config": config.to_dict(),
-        "env": collect_env(engine_version=adapter.server_version(handle)),
+        "env": env,
         "measured": measured,
         "score_details": score.details,
         "status": status,

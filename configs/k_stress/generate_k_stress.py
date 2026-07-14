@@ -106,6 +106,20 @@ engine_args:
   max_model_len: 8192
   enable_prefix_caching: false
   num_speculative_tokens: 5
+{env_note}"""
+
+# Bug-A postmortem (2026-07-11): the eagle3-fp16kv launch stalled once on a
+# 40GB session, at a launch command byte-identical to the factorial's
+# S-corner (which served 36 cells on 80GB) -- so the workload/context is
+# ruled out; suspected transient init/download stall or a 40GB-specific
+# flake. Retry as-is first: the stall watchdog now fails a wedged launch in
+# ~10 min and teardown can no longer orphan the GPU. If it stalls AGAIN,
+# uncomment the env override below in the probe corners (rung 2) to pin the
+# attention backend, and record the outcome in PREREQ_RESULTS.
+PROBE_ENV_NOTE = """\
+  # Rung 2 if this corner's launch stalls again (see Bug-A note above):
+  # env:
+  #   VLLM_ATTENTION_BACKEND: FLASHINFER
 """
 
 
@@ -126,6 +140,7 @@ def main(out_dir=None, with_w_corners=True, with_ks_probe=True) -> int:
                     model=model, weight=weight, kv=kv, spec=spec,
                     draft_line=("draft_model: %s\n" % draft) if draft else "",
                     n=n, conc=conc, repeat=repeat,
+                    env_note=PROBE_ENV_NOTE if spec != "none" else "",
                 )
                 name = "kstress_%s_c%d_r%d.yaml" % (tag, conc, repeat)
                 (out_dir / name).write_text(text)

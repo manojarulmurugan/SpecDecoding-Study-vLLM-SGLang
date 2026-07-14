@@ -36,3 +36,6 @@ engine_args:
   max_model_len: 8192
   enable_prefix_caching: false
   num_speculative_tokens: 5
+  # Rung 2 if this corner's launch stalls again (see Bug-A note above):
+  # env:
+  #   VLLM_ATTENTION_BACKEND: FLASHINFER
