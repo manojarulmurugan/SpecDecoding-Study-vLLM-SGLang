@@ -122,31 +122,53 @@ PROBE_ENV_NOTE = """\
   #   VLLM_ATTENTION_BACKEND: FLASHINFER
 """
 
-# KS-probe crash postmortem (2026-07-15; evidence: 2026-07-14 session logs
-# + CUDA_LAUNCH_BLOCKING repro in the notebook debug cells). With spec
-# decode on, vLLM 0.24.0 clamps max_num_scheduled_tokens to 2048 (launch
-# warning [vllm.py:1614]) and the compiled eagle_head kernels carry a
-# device-side bound `index < 2048`. This addendum's ~7.4k-token prompts
-# chunk-prefill at exactly 2048 tokens/step, and the step where a resumed
-# request sits at num_computed_tokens == 2048 indexes past the bound ->
-# Triton assert -> EngineCore dies. Short prompts (every prior EAGLE-3
-# run, factorial included) never cross the boundary; this addendum's long
-# prompts without spec decode never get the clamp -- which is why only
-# these 8 cells ever crashed. Upstream, spec-tokens x chunked-prefill is a
-# known bug seam (vllm-project/vllm PR #33652 and follow-on issues).
-# Fix below: --max-num-batched-tokens 8192 (= max_model_len) makes every
-# <=7936-token prefill single-step -- the same single-chunk regime every
-# other EAGLE-3 measurement in this project ran in -- and lifts the kernel
-# bound clear of the largest possible step (7936 + 5 draft slots < 8192).
-# Rung 2 if a probe corner STILL dies: add --enforce-eager (bypasses the
-# compiled kernels; document as a deviation -- eager is slower, weakening
-# the economics comparison). Rung 3: drop the probe cells and record a
+# KS-probe crash postmortem (2026-07-15, two rounds; evidence: 2026-07-14/15
+# session logs + CUDA_LAUNCH_BLOCKING repros in the notebook debug cells).
+# Symptom: every EAGLE-3 probe cell kills the engine with a device-side
+# assert (Triton `index out of bounds ... < 2048` from the compiled
+# eagle_head kernels) once the ~7.4k-token prompts are in play. Short
+# prompts (every prior EAGLE-3 run, factorial included) never trigger it;
+# this addendum's long prompts without spec decode never trigger it.
+#
+# Rung 1 (--max-num-batched-tokens 8192 alone): FALSIFIED 2026-07-15. The
+# theory was the spec-decode scheduler clamp to 2048 ([vllm.py:1614]
+# warning) plus chunked prefill landing a resumed request exactly on the
+# 2048 boundary. The flag was verified present in the launch command and
+# all 8 cells crashed identically (blocking repro: status=failed, assert
+# surfacing at a different host line -- prepare_inputs/pin_memory -- which
+# is consistent with the same poisoned kernel caught at a different sync
+# point). Raising the token budget does not touch the real defect.
+#
+# Rung 2 (--enforce-eager, bisection 2026-07-15): WORKS and is the adopted
+# fix. Same corner, same launch plus the flag -> status=ok, 34.2 tok/s,
+# tau=1.144. The exact root cause inside vLLM 0.24.0 remains unpinned, but
+# the bisection localizes it to the VLLM_COMPILE/CUDA-graph path for the
+# EAGLE-3 head at long context -- not the draft/verify logic itself and
+# not the scheduler budget. Upstream, spec decode x chunked prefill is a
+# known active bug seam (vllm-project/vllm PR #33652 and follow-ons).
+# --max-num-batched-tokens 8192 is RETAINED alongside it: the validated
+# working launch carried both flags (byte-identical config here), and it
+# still silences the draft-slot clamp warning.
+#
+# MEASUREMENT CAVEAT the analysis/report must carry: these 8 cells run
+# EAGER while everything else in the project (the 32 capacity cells, the
+# whole factorial) runs compiled. Within-probe ratios (fp8kv/fp16kv, both
+# eager) are clean; absolute probe tok/s vs any compiled cell is NOT a
+# like-for-like comparison. tau observations transfer (acceptance is
+# compilation-independent). Noted for later, not chased: the first eager
+# cell measured tau=1.144 at 7.4k-token RAG context vs ~2.5-2.8 in the
+# short-context repro gate -- possibly a real draft-head/long-context
+# finding; sanity-check once all 8 cells land.
+#
+# Rung 3 if a probe corner STILL dies: drop the probe cells and record a
 # vLLM 0.24.0 limitation in PREREQ_RESULTS -- user decision, not silent.
 PROBE_BATCHED_TOKENS_FIX = """\
-  # KS-probe crash fix (2026-07-15, see generator postmortem): single-chunk
-  # prefill for <=7936-token prompts + kernel bound above max step size.
-  # Rung 2 if this corner still crashes: append "--enforce-eager" here.
-  extra: ["--max-num-batched-tokens", "8192"]
+  # KS-probe crash fix, rung 2 (2026-07-15, see generator postmortem):
+  # --enforce-eager is load-bearing (compiled eagle_head kernels assert on
+  # ~7.4k-token prompts; rung 1 alone was falsified). Both flags together
+  # are byte-identical to the validated working launch. EAGER-MODE tok/s:
+  # not comparable to the compiled capacity cells -- see postmortem caveat.
+  extra: ["--max-num-batched-tokens", "8192", "--enforce-eager"]
 """
 
 

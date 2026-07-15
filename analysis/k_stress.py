@@ -147,6 +147,17 @@ def render_ks_probe_section(
         "emulation tax dominates regardless of context."
     )
     lines.append("")
+    lines.append(
+        "**EAGER-MODE CAVEAT (2026-07-15 crash fix):** these probe cells "
+        "run with --enforce-eager (vLLM 0.24.0's compiled eagle_head "
+        "kernels device-assert at this context length; PREREQ 2026-07-15), "
+        "while every other cell in the project runs compiled. Within-row "
+        "ratios (fp8kv/fp16kv, both eager) and tau are clean; absolute "
+        "probe tok/s vs any compiled cell -- including the K-solo column "
+        "here and the factorial's short-context KS goodput -- is NOT "
+        "like-for-like. Compare RATIOS across regimes, never raw goodput."
+    )
+    lines.append("")
     lines.append("| conc | goodput S+fp16kv | S+fp8kv (K-under-S ratio) | "
                  "tau fp16kv/fp8kv | K-solo ratio same conc (long ctx) |")
     lines.append("|" + "---|" * 5)

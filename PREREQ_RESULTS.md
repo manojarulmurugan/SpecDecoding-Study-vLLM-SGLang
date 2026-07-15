@@ -479,3 +479,47 @@ sweep cell redoes exactly the 8 failed cells (2 server launches). The
 notebook's debug cell (single-cell `harness.run` of `eagle3-fp16kv_c1_r0` to a
 throwaway results dir) validates the fix cheaply before committing to the
 full probe rerun.
+
+---
+
+## 2026-07-15 (later) — CORRECTION: KS-probe rung-1 fix falsified on GPU; --enforce-eager adopted (rung 2)
+
+The previous entry's rung-1 theory (2048 chunk-boundary; fix = raise
+`--max-num-batched-tokens` to 8192) was **falsified** in the live session:
+with the flag verified present in the launch command, all 8 probe cells
+crashed identically (`CUDA error: device-side assert triggered` →
+`EngineDeadError`). A fresh `CUDA_LAUNCH_BLOCKING=1` repro surfaced the
+assert at a different host line (`model_runner.py:861 prepare_inputs →
+buffer_utils.py:40 pin_memory`) than the original block-table trace —
+consistent with one poisoned compiled kernel being caught at whatever CUDA
+call syncs next, i.e. the host-side frames were never the defect. Lesson
+recorded: for device-side asserts, only the failing Triton/kernel source and
+the bisection are evidence; host stacks are noise even under
+CUDA_LAUNCH_BLOCKING.
+
+Bisection (2026-07-15, notebook debug cells): same corner
+(`kstress_eagle3-fp16kv_c1_r0`), same launch plus `--enforce-eager` →
+**status=ok, 34.2 tok/s mean/request, tau=1.144**. Conclusion: the defect is
+specific to vLLM 0.24.0's VLLM_COMPILE/CUDA-graph path for the EAGLE-3 head
+at long context; exact root cause unpinned (upstream-report material), not
+the draft/verify logic and not the scheduler budget.
+
+Adopted fix (generator, probe corners only):
+`extra: ["--max-num-batched-tokens", "8192", "--enforce-eager"]` —
+byte-identical to the validated working launch (8192 retained because the
+proven-good config carried both flags and it silences the draft-slot clamp
+warning). Regression tests updated: eagle3 commands must carry both flags,
+non-spec commands neither.
+
+**Standing measurement caveat (also emitted by analysis/k_stress.py in the
+KS-probe section):** the 8 probe cells are measured in EAGER mode; the 32
+capacity cells and the entire factorial are compiled. Within-probe ratios
+(fp8kv/fp16kv) and tau are clean; absolute probe tok/s is NOT comparable to
+any compiled cell. Every write-up that touches probe economics must compare
+ratios across regimes, never raw goodput.
+
+**Parked observation (do not lose, do not chase yet):** first eager cell
+measured tau=1.144 at 7.4k-token RAG context vs ~2.5–2.8 in the
+short-context repro gate — potentially a real finding (long-context RAG
+content harder for this draft head), or an artifact to sanity-check once all
+8 cells land.

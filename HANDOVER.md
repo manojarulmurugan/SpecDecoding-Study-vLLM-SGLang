@@ -36,18 +36,20 @@ naive-product-of-marginals minus measured full stack.
 - **Phase 3b (K-stress, 40 configs in configs/k_stress/): 32/40 DONE**
   (2026-07-14 session; K-isolation 16 + AWQ capacity corners 16, all
   `status: ok` in results/). The 8 long-context KS-probe cells (EAGLE-3)
-  crashed the engine and are root-caused + fixed awaiting rerun: vLLM
-  0.24.0 clamps the step token budget to 2048 under spec decode and its
-  compiled eagle_head kernels index OOB at the first resumed
-  chunked-prefill step of the ~7.4k prompts (full chain: PREREQ
-  2026-07-15 entry). Fix: probe corners now carry
-  `--max-num-batched-tokens 8192` (single-chunk prefill, same regime as
-  every other EAGLE-3 run); rung 2 = --enforce-eager; rung 3 = drop the 8
-  cells (user decision). Rerun = re-execute the sweep cell (resume skips
-  the 32 ok cells). Three prior failed attempts all root-caused and fixed:
-  (1) doc sizing 400s -> tokenizer-exact sizing + prompt_token_budget;
-  (2) Bug A launch stall + Bug B zombie EngineCore -> see below;
-  (3) this KS-probe engine crash.
+  crashed the engine; fix VALIDATED on GPU, awaiting final rerun. vLLM
+  0.24.0's compiled eagle_head kernels device-assert on the ~7.4k prompts;
+  rung 1 (--max-num-batched-tokens 8192 alone) was FALSIFIED live, rung 2
+  (--enforce-eager, bisection-confirmed: status=ok, tau=1.144) is adopted
+  -- probe corners carry both flags, byte-identical to the validated
+  launch (both PREREQ 2026-07-15 entries; the second corrects the first).
+  CAVEAT that must follow the probe numbers everywhere: those 8 cells are
+  EAGER, everything else compiled -- compare ratios, never raw tok/s
+  (analysis/k_stress.py prints this in the probe section). Parked: probe
+  tau=1.144 at long context vs ~2.5-2.8 short-context -- check once all 8
+  land. Rerun = re-execute the sweep cell (resume skips the 32 ok cells).
+  Prior failed attempts all root-caused and fixed: (1) doc sizing 400s ->
+  tokenizer-exact sizing + prompt_token_budget; (2) Bug A launch stall +
+  Bug B zombie EngineCore -> see below; (3) this KS-probe engine crash.
 
 ## Hard-won operational facts (do not re-learn these)
 

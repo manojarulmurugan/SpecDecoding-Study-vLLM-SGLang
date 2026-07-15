@@ -36,10 +36,12 @@ engine_args:
   max_model_len: 8192
   enable_prefix_caching: false
   num_speculative_tokens: 5
-  # KS-probe crash fix (2026-07-15, see generator postmortem): single-chunk
-  # prefill for <=7936-token prompts + kernel bound above max step size.
-  # Rung 2 if this corner still crashes: append "--enforce-eager" here.
-  extra: ["--max-num-batched-tokens", "8192"]
+  # KS-probe crash fix, rung 2 (2026-07-15, see generator postmortem):
+  # --enforce-eager is load-bearing (compiled eagle_head kernels assert on
+  # ~7.4k-token prompts; rung 1 alone was falsified). Both flags together
+  # are byte-identical to the validated working launch. EAGER-MODE tok/s:
+  # not comparable to the compiled capacity cells -- see postmortem caveat.
+  extra: ["--max-num-batched-tokens", "8192", "--enforce-eager"]
   # Rung 2 if this corner's launch stalls again (see Bug-A note above):
   # env:
   #   VLLM_ATTENTION_BACKEND: FLASHINFER
