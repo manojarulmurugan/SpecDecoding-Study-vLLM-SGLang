@@ -33,14 +33,21 @@ naive-product-of-marginals minus measured full stack.
   WS "amplified under batching" hypothesis FALSIFIED (flat-to-shrinking);
   novel: W drops tau on GSM8K (-14%) but not HumanEval/RAG -- WS has an
   acceptance channel on reasoning workloads, KS never does.
-- **Phase 3b (K-stress, 40 configs in configs/k_stress/): IN FLIGHT,
-  currently blocked** — see "Immediate blocker". Three corner sets: K
-  isolation under KV-capacity pressure (16), AWQ capacity corners (16),
-  long-context KS probe (8; completes the 2x2 tax-vs-bandwidth grid that
-  answers the QuantSpec divergence without an H100). Runs on pinned
-  A100-40GB. Two prior failed attempts, both root-caused and fixed:
+- **Phase 3b (K-stress, 40 configs in configs/k_stress/): 32/40 DONE**
+  (2026-07-14 session; K-isolation 16 + AWQ capacity corners 16, all
+  `status: ok` in results/). The 8 long-context KS-probe cells (EAGLE-3)
+  crashed the engine and are root-caused + fixed awaiting rerun: vLLM
+  0.24.0 clamps the step token budget to 2048 under spec decode and its
+  compiled eagle_head kernels index OOB at the first resumed
+  chunked-prefill step of the ~7.4k prompts (full chain: PREREQ
+  2026-07-15 entry). Fix: probe corners now carry
+  `--max-num-batched-tokens 8192` (single-chunk prefill, same regime as
+  every other EAGLE-3 run); rung 2 = --enforce-eager; rung 3 = drop the 8
+  cells (user decision). Rerun = re-execute the sweep cell (resume skips
+  the 32 ok cells). Three prior failed attempts all root-caused and fixed:
   (1) doc sizing 400s -> tokenizer-exact sizing + prompt_token_budget;
-  (2) Bug A launch stall + Bug B zombie EngineCore -> see below.
+  (2) Bug A launch stall + Bug B zombie EngineCore -> see below;
+  (3) this KS-probe engine crash.
 
 ## Hard-won operational facts (do not re-learn these)
 

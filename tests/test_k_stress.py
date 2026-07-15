@@ -231,6 +231,18 @@ def test_k_stress_config_set():
             assert "--kv-cache-dtype" not in cmd
         if cfg.factors.weight_quant == "w4a16":
             assert cmd[cmd.index("--quantization") + 1] == "awq_marlin"
+        # KS-probe crash fix (2026-07-15, generator postmortem): vLLM
+        # 0.24.0 clamps the scheduled-token budget to 2048 under spec
+        # decode and its eagle_head kernels index OOB (device assert
+        # `< 2048`) on the first resumed chunked-prefill step of this
+        # addendum's ~7.4k-token prompts. 8192 = max_model_len forces
+        # single-chunk prefill (the regime of every other EAGLE-3 run in
+        # the project). Non-spec cells must NOT carry the flag: their 32
+        # completed records were measured without it.
+        if cfg.factors.spec_decode == "eagle3":
+            assert cmd[cmd.index("--max-num-batched-tokens") + 1] == "8192"
+        else:
+            assert "--max-num-batched-tokens" not in cmd
 
 
 def test_k_stress_records_excluded_from_factorial():

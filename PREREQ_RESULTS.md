@@ -428,3 +428,54 @@ size verification and resumable `.part` files, and reconstructs the standard HF 
 find complete blobs and never GET the broken CDN route. `--curl-only` skips the doomed
 hf attempts entirely (~10 min/repo saved while the incident lasts). 8 new tests in
 `tests/test_predownload.py` (155 total passing).
+
+---
+
+## 2026-07-15 — KS-probe crash (8/40 Phase-3b cells) root-caused: vLLM 0.24.0 spec-decode token-budget clamp x chunked prefill on long prompts
+
+Symptom: both EAGLE-3 probe servers (fp16kv and fp8kv) died with
+`torch.AcceleratorError: CUDA error: device-side assert triggered` ~2 min into
+serving; all 8 probe cells `status: failed`, all 32 non-spec cells clean.
+A `CUDA_LAUNCH_BLOCKING=1` repro (notebook debug cells) pinned the device-side
+assert: Triton `index out of bounds: 0 <= tmpNN < 2048` from an
+inductor-compiled kernel in the **eagle_head** torch.compile cache, with the
+dumped scheduler state at `num_computed_tokens=[2048]`,
+`total_num_scheduled_tokens=2048` on a resumed (chunked-prefill) request.
+
+Root cause chain, each link verified in the server logs:
+1. With spec decode on, vLLM 0.24.0 clamps the per-step token budget — launch
+   warning `[vllm.py:1614] max_num_scheduled_tokens is set to 2048 based on
+   the speculative decoding settings... Consider increasing
+   max_num_batched_tokens to accommodate the additional draft token slots`.
+   The eagle-head compile also specializes at that boundary
+   (`compile_ranges_endpoints: [2048]`).
+2. This addendum's ~7.4k-token prompts therefore chunk-prefill at 2048
+   tokens/step under EAGLE-3; at the step where a resumed request sits
+   exactly at the 2048 boundary, the compiled eagle_head kernels index past
+   their `< 2048` bound → device assert → EngineCore fatal.
+3. Why nothing hit this before: every prior EAGLE-3 measurement (Block-0,
+   Phase 2, the full factorial) used short prompts that prefill in one step —
+   never crossing the boundary; every long-prompt Phase-3b cell without spec
+   decode never gets the clamp. Only the KS probe combines both. Upstream,
+   spec-tokens x chunked-prefill is a known active bug seam (vLLM PR #33652
+   "Don't schedule spec tokens with prefill chunks", Feb 2026, plus follow-on
+   regressions), so this is engine, not harness.
+
+Fix (rung 1, applied in `configs/k_stress/generate_k_stress.py`, probe corners
+only): `--max-num-batched-tokens 8192` (= max_model_len) — every ≤7936-token
+prefill becomes single-step (the same single-chunk regime as every other
+EAGLE-3 run in the project, so comparability improves rather than degrades)
+and the kernel bound rises clear of the largest possible step (7936 + 5 draft
+slots < 8192). The 32 completed capacity cells are untouched — non-spec
+configs deliberately do NOT carry the flag, enforced by a regression test
+(`test_k_stress_config_set`). Rung 2 if a probe corner still dies:
+`--enforce-eager` — demoted from first choice because eager-vs-compiled
+contaminates the tok/s economics the probe exists to measure (fine as a
+diagnostic, poor as the recorded configuration). Rung 3: drop the 8 cells and
+record a vLLM 0.24.0 limitation — user decision, never silent.
+
+Rerun ergonomics: `harness.sweep` skips only `status: ok`, so re-running the
+sweep cell redoes exactly the 8 failed cells (2 server launches). The
+notebook's debug cell (single-cell `harness.run` of `eagle3-fp16kv_c1_r0` to a
+throwaway results dir) validates the fix cheaply before committing to the
+full probe rerun.

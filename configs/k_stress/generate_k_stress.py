@@ -122,6 +122,33 @@ PROBE_ENV_NOTE = """\
   #   VLLM_ATTENTION_BACKEND: FLASHINFER
 """
 
+# KS-probe crash postmortem (2026-07-15; evidence: 2026-07-14 session logs
+# + CUDA_LAUNCH_BLOCKING repro in the notebook debug cells). With spec
+# decode on, vLLM 0.24.0 clamps max_num_scheduled_tokens to 2048 (launch
+# warning [vllm.py:1614]) and the compiled eagle_head kernels carry a
+# device-side bound `index < 2048`. This addendum's ~7.4k-token prompts
+# chunk-prefill at exactly 2048 tokens/step, and the step where a resumed
+# request sits at num_computed_tokens == 2048 indexes past the bound ->
+# Triton assert -> EngineCore dies. Short prompts (every prior EAGLE-3
+# run, factorial included) never cross the boundary; this addendum's long
+# prompts without spec decode never get the clamp -- which is why only
+# these 8 cells ever crashed. Upstream, spec-tokens x chunked-prefill is a
+# known bug seam (vllm-project/vllm PR #33652 and follow-on issues).
+# Fix below: --max-num-batched-tokens 8192 (= max_model_len) makes every
+# <=7936-token prefill single-step -- the same single-chunk regime every
+# other EAGLE-3 measurement in this project ran in -- and lifts the kernel
+# bound clear of the largest possible step (7936 + 5 draft slots < 8192).
+# Rung 2 if a probe corner STILL dies: add --enforce-eager (bypasses the
+# compiled kernels; document as a deviation -- eager is slower, weakening
+# the economics comparison). Rung 3: drop the probe cells and record a
+# vLLM 0.24.0 limitation in PREREQ_RESULTS -- user decision, not silent.
+PROBE_BATCHED_TOKENS_FIX = """\
+  # KS-probe crash fix (2026-07-15, see generator postmortem): single-chunk
+  # prefill for <=7936-token prompts + kernel bound above max step size.
+  # Rung 2 if this corner still crashes: append "--enforce-eager" here.
+  extra: ["--max-num-batched-tokens", "8192"]
+"""
+
 
 def main(out_dir=None, with_w_corners=True, with_ks_probe=True) -> int:
     out_dir = pathlib.Path(out_dir) if out_dir else pathlib.Path(__file__).parent
@@ -140,7 +167,8 @@ def main(out_dir=None, with_w_corners=True, with_ks_probe=True) -> int:
                     model=model, weight=weight, kv=kv, spec=spec,
                     draft_line=("draft_model: %s\n" % draft) if draft else "",
                     n=n, conc=conc, repeat=repeat,
-                    env_note=PROBE_ENV_NOTE if spec != "none" else "",
+                    env_note=(PROBE_BATCHED_TOKENS_FIX + PROBE_ENV_NOTE)
+                             if spec != "none" else "",
                 )
                 name = "kstress_%s_c%d_r%d.yaml" % (tag, conc, repeat)
                 (out_dir / name).write_text(text)

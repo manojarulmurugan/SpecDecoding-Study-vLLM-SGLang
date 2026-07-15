@@ -1,0 +1,84 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "k_stress",
+    "concurrency": 8,
+    "decoding": "greedy",
+    "draft_model": "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B",
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "env": {},
+      "extra": [],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp8",
+      "spec_decode": "eagle3",
+      "weight_quant": "fp16"
+    },
+    "gpu_target": "a100_40gb",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "repeat_idx": 0,
+    "run_id": "k_stress_llama-3-1-8b-instruct_fp16-fp8-eagle3_rag_shared_prefix_c8_r0",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "rag_shared_prefix",
+    "workload_params": {
+      "doc_target_tokens": 7400,
+      "max_new_tokens": 256,
+      "num_requests": 64,
+      "prefix_overlap": "low",
+      "prompt_token_budget": 7900,
+      "request_timeout_s": 1800,
+      "spec_bench_file": "external/Spec-Bench/data/spec_bench/question.jsonl",
+      "tokenizer_model": "meta-llama/Llama-3.1-8B-Instruct"
+    }
+  },
+  "env": {
+    "attention_backend": "attention backend out of potential backends: ['FLASHINFER', 'TRITON_ATTN'].",
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": null,
+    "git_commit": "2c18615097ed6e9b0afe3979ab6e7fc8d81378c9",
+    "gpu_name": "NVIDIA A100-SXM4-40GB",
+    "timestamp_utc": "2026-07-14T23:48:51.917356+00:00"
+  },
+  "measured": {
+    "acceptance_rate": null,
+    "accepted_length_tau": null,
+    "accuracy": null,
+    "e2e_latency_ms": null,
+    "emergent_batch_size": null,
+    "goodput_tok_s": 0.0,
+    "itl_ms": null,
+    "kv_cache_usage": null,
+    "num_errors": 64,
+    "num_preemptions": null,
+    "num_requests": 64,
+    "prompt_tokens_mean": null,
+    "queue_depth": null,
+    "request_decode_tok_s_mean": null,
+    "request_tok_s_mean": null,
+    "spec_num_drafts": null,
+    "spec_rejected_tok_s": null,
+    "throughput_tok_s": 0.0,
+    "total_completion_tokens": 0,
+    "ttft_ms": null,
+    "wall_time_s": 0.0631414669996957
+  },
+  "run_id": "k_stress_llama-3-1-8b-instruct_fp16-fp8-eagle3_rag_shared_prefix_c8_r0",
+  "score_details": [
+    {
+      "num_empty_outputs": 64,
+      "num_outputs": 64
+    }
+  ],
+  "status": "failed"
+}

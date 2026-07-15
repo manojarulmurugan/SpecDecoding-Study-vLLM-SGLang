@@ -36,6 +36,10 @@ engine_args:
   max_model_len: 8192
   enable_prefix_caching: false
   num_speculative_tokens: 5
+  # KS-probe crash fix (2026-07-15, see generator postmortem): single-chunk
+  # prefill for <=7936-token prompts + kernel bound above max step size.
+  # Rung 2 if this corner still crashes: append "--enforce-eager" here.
+  extra: ["--max-num-batched-tokens", "8192"]
   # Rung 2 if this corner's launch stalls again (see Bug-A note above):
   # env:
   #   VLLM_ATTENTION_BACKEND: FLASHINFER
