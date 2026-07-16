@@ -17,6 +17,9 @@ import yaml
 VALID_BLOCKS = {
     "repro", "serving_baseline", "core_factorial", "k_stress",
     "sglang_seam", "optional",
+    # Phase-3c sanity/bisection cells (configs/diagnostics/); excluded from
+    # the factorial and k_stress analyses by their block filters.
+    "diagnostics",
 }
 VALID_ENGINES = {"vllm", "sglang"}
 VALID_WEIGHT_QUANT = {"fp16", "w4a16", "w8a8", "w4a8"}

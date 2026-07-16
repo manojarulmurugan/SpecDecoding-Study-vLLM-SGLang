@@ -112,8 +112,40 @@ UNBLOCKED pending the user's next 40GB session.
 
 ## Next milestones after 3b lands
 
-Run analysis/k_stress.py (capacity table + W-capacity + KS-probe sections),
-fold findings into the decision guide; then Phase 4 (SGLang RAG seam,
-optional) and Phase 5 (decision guide + write-up series — the debugging
-archives in colab/ are deliberate material for the "reproducing research"
-post).
+**Phase 3c diagnostics micro-session (READY, gates the write-up): 9 cells,
+4 launches, ~20-25 units on 40GB — `colab/phase3c_diagnostics_40gb.ipynb`,
+configs in `configs/diagnostics/` (generated; block `diagnostics`, excluded
+from other analyses; tests in tests/test_diagnostics.py).** Settles: (1)
+tau=1.14 real-vs-eager-artifact (eager EAGLE-3 on short GSM8K; ~2.85 =
+real); (2) S-main at long context (no-spec eager baseline vs probe: refs
+34.0/166.4 tok/s at c1/c8); (3) cudagraph-capture bisection of the vLLM
+0.24.0 crash (compile on, graphs off; EITHER status is the answer — never
+retry a crash); (4) attention-backend component of K contrasts (FLASHINFER
+pinned on fp16-KV c8 vs ~221 tok/s FLASH_ATTN reference). Verdict logic is
+printed by the notebook's cell 8.
+
+Then: fold k_stress + diagnostics into the decision guide (quality axis is
+a hard requirement, see below; also add a quality-side factorial pass over
+the EXISTING phase3 records — measured.accuracy is recorded in all 288);
+then Phase 4 (SGLang RAG seam, optional) and Phase 5 (decision guide +
+write-up series — the debugging archives in colab/ are deliberate material
+for the "reproducing research" post).
+
+**Decision-guide requirement (2026-07-15, verified against phase3_results/runs/):
+the three levers do NOT cost the same thing on the quality axis — this must be
+an explicit dimension in analysis/decision_guide.py, not just a speed/goodput
+recommendation.** Pulled real `measured.accuracy` values directly (GSM8K
+exact-match, HumanEval unit-test pass/fail; RAG has no ground truth by design,
+always null, not a gap):
+- **W (W4A16) measurably costs accuracy**: -5 to -14 points vs FP16 on both
+  GSM8K and HumanEval, every cell checked. A real quality-for-speed trade.
+- **K (FP8-KV) costs ~nothing**: differences within 1-2 questions out of 64,
+  consistent with float rounding noise, not degradation.
+- **S (EAGLE-3) costs ~nothing under greedy decoding**: HumanEval shows
+  bit-for-bit identical accuracy spec-on vs spec-off in every cell checked;
+  this is the expected theoretical guarantee (greedy spec decode is
+  output-preserving), and tests/test_repro_gate.py::test_accuracy_drift_under_greedy_spec_warns
+  already exists to catch a violation.
+The guide's recommendations should reflect this asymmetry explicitly (e.g.
+"reach for K and S first if quality risk matters; W buys more but you pay for
+it in correctness") rather than ranking the three levers on speed alone.

@@ -1,0 +1,114 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "k_stress",
+    "concurrency": 48,
+    "decoding": "greedy",
+    "draft_model": null,
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "env": {},
+      "extra": [],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp8",
+      "spec_decode": "none",
+      "weight_quant": "fp16"
+    },
+    "gpu_target": "a100_40gb",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "repeat_idx": 0,
+    "run_id": "k_stress_llama-3-1-8b-instruct_fp16-fp8-none_rag_shared_prefix_c48_r0",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "rag_shared_prefix",
+    "workload_params": {
+      "doc_target_tokens": 7400,
+      "max_new_tokens": 256,
+      "num_requests": 192,
+      "prefix_overlap": "low",
+      "prompt_token_budget": 7900,
+      "request_timeout_s": 1800,
+      "spec_bench_file": "external/Spec-Bench/data/spec_bench/question.jsonl",
+      "tokenizer_model": "meta-llama/Llama-3.1-8B-Instruct"
+    }
+  },
+  "env": {
+    "attention_backend": "attention backend out of potential backends: ['FLASHINFER', 'TRITON_ATTN'].",
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "2c18615097ed6e9b0afe3979ab6e7fc8d81378c9",
+    "gpu_name": "NVIDIA A100-SXM4-40GB",
+    "timestamp_utc": "2026-07-14T22:55:43.861258+00:00"
+  },
+  "measured": {
+    "acceptance_rate": null,
+    "accepted_length_tau": null,
+    "accuracy": null,
+    "e2e_latency_ms": {
+      "mean": 39767.58055313022,
+      "p50": 39436.266080499765,
+      "p95": 62013.2123742501,
+      "p99": 67345.4467713799
+    },
+    "emergent_batch_size": {
+      "max": 38.0,
+      "mean": 33.45398773006135,
+      "num_samples": 163,
+      "p50": 37.0
+    },
+    "goodput_tok_s": 297.53751626354097,
+    "itl_ms": {
+      "mean": 109.8772393285009,
+      "p50": 55.73229650008216,
+      "p95": 212.818053850242,
+      "p99": 220.92402257003414
+    },
+    "kv_cache_usage": {
+      "max": 0.999664072560327,
+      "mean": 0.8751806296956421,
+      "num_samples": 163,
+      "p50": 0.959912658865685
+    },
+    "num_errors": 0,
+    "num_preemptions": 6.0,
+    "num_requests": 192,
+    "prompt_tokens_mean": 7437.364583333333,
+    "queue_depth": {
+      "max": 44.0,
+      "mean": 12.503067484662576,
+      "num_samples": 163,
+      "p50": 11.0
+    },
+    "request_decode_tok_s_mean": 10.17844956588703,
+    "request_tok_s_mean": 6.769880851330382,
+    "spec_num_drafts": null,
+    "spec_rejected_tok_s": null,
+    "throughput_tok_s": 297.53751626354097,
+    "total_completion_tokens": 48822,
+    "ttft_ms": {
+      "mean": 11937.736029458343,
+      "p50": 9087.850882499879,
+      "p95": 28162.693447450016,
+      "p99": 36237.46840828987
+    },
+    "wall_time_s": 164.08687083600034
+  },
+  "run_id": "k_stress_llama-3-1-8b-instruct_fp16-fp8-none_rag_shared_prefix_c48_r0",
+  "score_details": [
+    {
+      "num_empty_outputs": 0,
+      "num_outputs": 192
+    }
+  ],
+  "status": "ok"
+}
