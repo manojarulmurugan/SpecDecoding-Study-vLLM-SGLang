@@ -1,0 +1,365 @@
+{
+  "config": {
+    "batch_sample_interval_s": 1.0,
+    "block": "diagnostics",
+    "concurrency": 1,
+    "decoding": "greedy",
+    "draft_model": "yuhuili/EAGLE3-LLaMA3.1-Instruct-8B",
+    "engine": "vllm",
+    "engine_args": {
+      "dtype": "float16",
+      "enable_prefix_caching": false,
+      "env": {},
+      "extra": [
+        "--max-num-batched-tokens",
+        "8192",
+        "--enforce-eager"
+      ],
+      "gpu_memory_utilization": 0.85,
+      "host": "127.0.0.1",
+      "max_model_len": 8192,
+      "num_speculative_tokens": 5,
+      "port": 8000,
+      "quantization": null
+    },
+    "factors": {
+      "kv_quant": "fp16",
+      "spec_decode": "eagle3",
+      "weight_quant": "fp16"
+    },
+    "gpu_target": "a100_40gb",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "repeat_idx": 0,
+    "run_id": "diag_tau-eager-short_c1_r0",
+    "seed": 1234,
+    "warmup_requests": 4,
+    "workload": "gsm8k",
+    "workload_params": {
+      "max_new_tokens": 256,
+      "n_shot": 8,
+      "num_requests": 64
+    }
+  },
+  "env": {
+    "attention_backend": "attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].",
+    "cuda": "13.0",
+    "driver": "580.82.07",
+    "engine_version": "0.24.0",
+    "git_commit": "5a239efb7176114cebaf00dca1d76b9b206780de",
+    "gpu_name": "NVIDIA A100-SXM4-40GB",
+    "timestamp_utc": "2026-07-16T23:31:05.141195+00:00"
+  },
+  "measured": {
+    "acceptance_rate": 0.36592159559834936,
+    "accepted_length_tau": 2.829607977991747,
+    "accuracy": 0.8125,
+    "e2e_latency_ms": {
+      "mean": 2965.8702120156163,
+      "p50": 2923.5629660001905,
+      "p95": 3557.024939750272,
+      "p99": 3764.704341439346
+    },
+    "emergent_batch_size": {
+      "max": 1.0,
+      "mean": 0.9735449735449735,
+      "num_samples": 189,
+      "p50": 1.0
+    },
+    "goodput_tok_s": 86.30950774831153,
+    "itl_ms": {
+      "mean": 31.885064968647868,
+      "p50": 31.7108740000549,
+      "p95": 33.77410260000033,
+      "p99": 37.41374799981713
+    },
+    "kv_cache_usage": {
+      "max": 0.00781536207107092,
+      "mean": 0.006343520569921834,
+      "num_samples": 189,
+      "p50": 0.006472096715105624
+    },
+    "num_errors": 0,
+    "num_preemptions": 0.0,
+    "num_requests": 64,
+    "prompt_tokens_mean": 717.828125,
+    "queue_depth": {
+      "max": 0.0,
+      "mean": 0.0,
+      "num_samples": 189,
+      "p50": 0.0
+    },
+    "request_decode_tok_s_mean": 89.61784256888686,
+    "request_tok_s_mean": 87.34096634702158,
+    "spec_num_drafts": 5816.0,
+    "spec_rejected_tok_s": 97.13507161688942,
+    "throughput_tok_s": 86.30950774831153,
+    "total_completion_tokens": 16384,
+    "ttft_ms": {
+      "mean": 73.79517853122763,
+      "p50": 73.2900544999211,
+      "p95": 79.42193905023485,
+      "p99": 82.45830301985733
+    },
+    "wall_time_s": 189.8284491180002
+  },
+  "run_id": "diag_tau-eager-short_c1_r0",
+  "score_details": [
+    {
+      "correct": true,
+      "pred": "694"
+    },
+    {
+      "correct": true,
+      "pred": "125"
+    },
+    {
+      "correct": true,
+      "pred": "104"
+    },
+    {
+      "correct": true,
+      "pred": "35"
+    },
+    {
+      "correct": true,
+      "pred": "9"
+    },
+    {
+      "correct": false,
+      "pred": "36"
+    },
+    {
+      "correct": true,
+      "pred": "1596"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "348"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": true,
+      "pred": "10000"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": false,
+      "pred": "-76"
+    },
+    {
+      "correct": false,
+      "pred": "17"
+    },
+    {
+      "correct": true,
+      "pred": "1400"
+    },
+    {
+      "correct": true,
+      "pred": "1210"
+    },
+    {
+      "correct": false,
+      "pred": "30"
+    },
+    {
+      "correct": true,
+      "pred": "30"
+    },
+    {
+      "correct": true,
+      "pred": "5"
+    },
+    {
+      "correct": true,
+      "pred": "114200"
+    },
+    {
+      "correct": true,
+      "pred": "21"
+    },
+    {
+      "correct": true,
+      "pred": "280"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": true,
+      "pred": "370"
+    },
+    {
+      "correct": true,
+      "pred": "3200"
+    },
+    {
+      "correct": true,
+      "pred": "310"
+    },
+    {
+      "correct": true,
+      "pred": "87"
+    },
+    {
+      "correct": true,
+      "pred": "45"
+    },
+    {
+      "correct": true,
+      "pred": "168000"
+    },
+    {
+      "correct": true,
+      "pred": "98"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": false,
+      "pred": "550"
+    },
+    {
+      "correct": true,
+      "pred": "110"
+    },
+    {
+      "correct": true,
+      "pred": "30"
+    },
+    {
+      "correct": false,
+      "pred": "750"
+    },
+    {
+      "correct": true,
+      "pred": "76"
+    },
+    {
+      "correct": false,
+      "pred": "80"
+    },
+    {
+      "correct": true,
+      "pred": "168"
+    },
+    {
+      "correct": true,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "112"
+    },
+    {
+      "correct": false,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "8"
+    },
+    {
+      "correct": true,
+      "pred": "60"
+    },
+    {
+      "correct": true,
+      "pred": "42"
+    },
+    {
+      "correct": false,
+      "pred": "10"
+    },
+    {
+      "correct": true,
+      "pred": "227"
+    },
+    {
+      "correct": true,
+      "pred": "63"
+    },
+    {
+      "correct": true,
+      "pred": "15"
+    },
+    {
+      "correct": true,
+      "pred": "3"
+    },
+    {
+      "correct": false,
+      "pred": "62.50"
+    },
+    {
+      "correct": false,
+      "pred": "0"
+    },
+    {
+      "correct": true,
+      "pred": "736"
+    },
+    {
+      "correct": true,
+      "pred": "2400"
+    },
+    {
+      "correct": true,
+      "pred": "26"
+    },
+    {
+      "correct": true,
+      "pred": "38"
+    },
+    {
+      "correct": true,
+      "pred": "1"
+    },
+    {
+      "correct": true,
+      "pred": "20"
+    },
+    {
+      "correct": true,
+      "pred": "6"
+    },
+    {
+      "correct": true,
+      "pred": "280"
+    },
+    {
+      "correct": true,
+      "pred": "240"
+    },
+    {
+      "correct": false,
+      "pred": "58.89"
+    },
+    {
+      "correct": true,
+      "pred": "235"
+    },
+    {
+      "correct": true,
+      "pred": "70"
+    }
+  ],
+  "status": "ok"
+}

@@ -112,24 +112,23 @@ UNBLOCKED pending the user's next 40GB session.
 
 ## Next milestones after 3b lands
 
-**Phase 3c diagnostics micro-session (READY, gates the write-up): 9 cells,
-4 launches, ~20-25 units on 40GB — `colab/phase3c_diagnostics_40gb.ipynb`,
-configs in `configs/diagnostics/` (generated; block `diagnostics`, excluded
-from other analyses; tests in tests/test_diagnostics.py).** Settles: (1)
-tau=1.14 real-vs-eager-artifact (eager EAGLE-3 on short GSM8K; ~2.85 =
-real); (2) S-main at long context (no-spec eager baseline vs probe: refs
-34.0/166.4 tok/s at c1/c8); (3) cudagraph-capture bisection of the vLLM
-0.24.0 crash (compile on, graphs off; EITHER status is the answer — never
-retry a crash); (4) attention-backend component of K contrasts (FLASHINFER
-pinned on fp16-KV c8 vs ~221 tok/s FLASH_ATTN reference). Verdict logic is
-printed by the notebook's cell 8.
+**Phase 3c diagnostics: DONE 2026-07-16, 9/9 ok-or-informative (results in
+phase3c_diagnostics_results/, full verdicts in PREREQ 2026-07-16 entry).**
+(1) tau=1.14 is REAL (eager short-context tau 2.83/2.88 — eager innocent);
+(2) EAGLE-3 measured COUNTERPRODUCTIVE at 7.4k context (S = x0.94 at c1,
+x0.89 at c8 vs no-spec eager baseline) — decision-guide + write-up
+headline; (3) crash bisection final: inductor-compiled eagle_head kernel
+bug, NOT cudagraph capture (cudagraph_mode=NONE still asserts; kernel
+bound 2048 even with budget 8192) — upstream issue FILED:
+github.com/vllm-project/vllm/issues/48894; (4) attention-backend confound
+cleared (~0.2%): K effects are genuinely KV precision.
 
-Then: fold k_stress + diagnostics into the decision guide (quality axis is
-a hard requirement, see below; also add a quality-side factorial pass over
-the EXISTING phase3 records — measured.accuracy is recorded in all 288);
-then Phase 4 (SGLang RAG seam, optional) and Phase 5 (decision guide +
-write-up series — the debugging archives in colab/ are deliberate material
-for the "reproducing research" post).
+Then: Phase 5 deliverables — `analysis/stack_advisor.py` (the decision
+guide as a provenance-carrying CLI; quality axis is a hard requirement,
+see below; plus a quality-side factorial pass over the EXISTING phase3
+records — measured.accuracy is recorded in all 288); Phase 4 (SGLang RAG
+seam, optional); write-up series (the debugging archives in colab/ are
+deliberate material for the "reproducing research" post).
 
 **Decision-guide requirement (2026-07-15, verified against phase3_results/runs/):
 the three levers do NOT cost the same thing on the quality axis — this must be

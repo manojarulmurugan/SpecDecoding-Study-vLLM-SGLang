@@ -52,3 +52,33 @@ the current dataset.
 **Write-up framing suggestion:** pair this with the τ=1.14 anomaly as one beat — "two papers,
 two different bets on where LLM decoding's cost lives (compute vs. bandwidth), and our data
 shows both bets paying off in their own narrow regime and failing outside it."
+
+---
+
+## Phase-3c verdicts: two headline candidates + two cleared confounds (2026-07-16)
+
+**Headline candidate 1 — "speculative decoding has a context-length cliff, and it's an
+acceptance cliff, not a compute cliff":** tau collapses 2.85 → 1.14 when the same EAGLE-3
+head moves from ~1k-token conversational prompts to 7.4k-token unique RAG documents
+(eager-mode confound experimentally excluded: tau=2.83–2.88 eager short-context). With 5
+draft tokens per round, tau=1.14 means ~77% of drafted tokens are thrown away — and the
+measured consequence is that S is net-NEGATIVE at long context at every concurrency tested
+(x0.94 at c1, x0.89 at c8, no-spec eager baseline vs S-on, same regime). Pairs with the
+QuantSpec-mechanism note above: this is the exact regime QuantSpec's structural-acceptance
+design exists for.
+
+**Headline candidate 2 — the decision guide's S rule is now context-conditional, measured
+on both sides:** short context, low concurrency: S is the best quality-free lever
+(x1.27–2.11 at c1, workload-dependent via tau). Long context: turn S off. Crossovers in
+BOTH dimensions (concurrency AND context length) are now measured, not extrapolated.
+
+**Cleared confound 1:** attention-backend switch inside K comparisons ≈ 0.2% (FLASHINFER
+pinned on FP16-KV: 220.6 vs 221 tok/s reference). One sentence in methods, then never
+worry again.
+
+**Cleared confound 2 (negative result worth one line):** the vLLM 0.24.0 EAGLE-3
+long-context crash is NOT CUDA-graph capture — same Triton assert with graphs off,
+compile on; kernel bound stays 2048 even when the token budget is 8192. It's an
+inductor-compiled eagle_head kernel bug; eager is the only working mode in 0.24.0.
+Upstream issue material, and an honest "what it cost us" beat for the debugging post
+(the 8 probe cells run eager; ratios/tau comparable, absolute tok/s not).

@@ -523,3 +523,34 @@ measured tau=1.144 at 7.4k-token RAG context vs ~2.5–2.8 in the
 short-context repro gate — potentially a real finding (long-context RAG
 content harder for this draft head), or an artifact to sanity-check once all
 8 cells land.
+
+---
+
+## 2026-07-16 — Phase-3c diagnostics: all four questions answered (9/9 cells, verified against phase3c_diagnostics_results/)
+
+1. **tau collapse is REAL, eager is innocent.** EAGLE-3 in eager mode on
+   short GSM8K (server byte-compatible with the probe): tau = 2.830 / 2.878
+   across repeats — squarely in the healthy 2.5–2.9 range every compiled
+   short-context cell shows. The probe's tau≈1.14 at 7.4k-token RAG context
+   is therefore a genuine long-context/draft-head finding, not a
+   compilation-mode artifact.
+2. **EAGLE-3 is measurably counterproductive at 7.4k-token context.**
+   No-spec eager baseline vs the probe's S-on cells (same server flags,
+   same workload, same regime): c1 36.0 vs 34.0 tok/s (S = x0.94), c8 187.9
+   vs 166.4 (S = x0.89). tau=1.14 with 5 draft tokens per round means ~77%
+   of draft compute is discarded — S burns more than it saves once the
+   drafter is out-of-distribution. Decision-guide + write-up headline.
+3. **Crash bisection FINAL: the vLLM 0.24.0 defect is in the
+   inductor-compiled eagle_head kernels, NOT CUDA-graph capture.** With
+   compile ON and `cudagraph_mode=NONE` (verified in effect in
+   server_20260716_235052.log) the same Triton assert fires
+   (`index out of bounds: 0 <= tmp10 < 2048`). Decisive extra fact: this
+   run had NO 2048 scheduler clamp (8192 budget respected,
+   compile_ranges_endpoints=[8192]) yet the kernel bound is still 2048 —
+   the bound is baked into the compiled eagle_head artifact independent of
+   the token budget. Full matrix: FULL_AND_PIECEWISE crash, NONE crash,
+   eager OK, short-prompt compiled OK, long-prompt no-spec compiled OK.
+4. **Attention-backend confound CLEARED.** FP16-KV c8 with FLASHINFER
+   pinned: 220.8 / 220.4 tok/s vs 221 on FLASH_ATTN — the backend switch
+   that rides along with every K comparison contributes ~0.2%. The
+   project's K effects are genuinely about KV precision.

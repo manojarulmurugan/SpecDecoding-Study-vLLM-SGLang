@@ -42,6 +42,40 @@ Full detail in `PREREQ_RESULTS.md`; the numbers below already reflect the correc
 **Next up:** Phase 2 (serving baseline + single-optimization marginals) — see
 `IMPLEMENTATION_PLAN.md`.
 
+**Update (2026-07-16):** Phases 2, 3, 3b and 3c are complete — 385 measured cells
+across the marginals (48), the full replicated 2³ factorial (288), the K-stress
+capacity addendum (40), and the follow-up diagnostics (9). All seven pre-registered
+hypotheses are answered; see `HANDOVER.md` for the current state and
+`WRITEUP_NOTES.md` for the findings narrative. Remaining: decision guide polish,
+optional SGLang seam (Phase 4), write-ups (Phase 5).
+
+---
+
+## The runnable artifacts (start here if you're skimming)
+
+This repo is a study, but it ships three things you can run or reuse today:
+
+1. **`stack-advisor`** — the decision guide as a CLI. Give it your deployment
+   scenario; it tells you which optimizations to enable, the expected effect
+   range, and — unlike a blog post — cites the measured cells behind every
+   recommendation and says where the data stops:
+   ```
+   python3 -m analysis.stack_advisor --context-tokens 7400 --concurrency 48
+   python3 -m analysis.stack_advisor --list-findings
+   ```
+2. **The benchmark harness** (`harness/`) — a reusable, engine-agnostic serving
+   benchmark: generated configs (never hand-edited YAML), resumable sweeps with
+   server-launch amortization, process-group-safe engine lifecycle (survives
+   vLLM V1's multi-process EngineCore), a two-signal launch watchdog that
+   doesn't false-kill cold model downloads, per-run atomic JSON records with
+   full environment capture, and a fake-server test suite — **171 tests, all
+   runnable with no GPU** (`python3 -m pytest tests -q`).
+3. **An upstream bug report** distilled from the Phase-3c bisection:
+   [vllm-project/vllm#48894](https://github.com/vllm-project/vllm/issues/48894)
+   — EAGLE-3 + long prompts crash vLLM 0.24.0's inductor-compiled eagle_head
+   kernels (eager works; CUDA-graphs-off still crashes; kernel bound stuck at
+   2048 regardless of token budget).
+
 ---
 
 ## What this project is (and is not)
