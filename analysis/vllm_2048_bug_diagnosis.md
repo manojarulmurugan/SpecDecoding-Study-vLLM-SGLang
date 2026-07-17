@@ -43,13 +43,33 @@ Nothing here has been posted anywhere — draft comment for the GitHub issues is
    `index out of bounds: 0 <= tmp < 2048`. Any request whose draft prefill
    reaches position ≥ 2048 fires it.
 
-4. **Why `--enforce-eager` "avoids" it.**
-   Eager mode dispatches to `forward_cuda` (`base.py:221`), the hand-written CUDA
-   rope kernel, which does **unchecked** pointer arithmetic into `cos_sin_cache`.
-   No bounds check → no assert → out-of-bounds *read*. The final output text is
-   still correct (rejection sampling is lossless), but draft tokens at positions
-   ≥ 2048 get garbage cos/sin, so their acceptance rate should degrade — eager
-   mode hides the bug, it does not fix it.
+4. **Why `--enforce-eager` "avoids" it.** [REVISED 2026-07-17 after a
+   challenge; see "Dispatch dispute" appendix. Dispatch claim CONFIRMED at
+   source + our own logs; the "acceptance degrades" consequence claim was
+   WRONG and is corrected here.]
+   Under `--enforce-eager`, compilation mode is NONE, so the custom-ops
+   default resolves to `'all'` (`vllm/config/vllm.py` `__post_init__`:
+   `custom_ops.append("none")` only when `backend == "inductor" and
+   mode != NONE`, else `append("all")`) — confirmed in our own successful
+   eager server log (`server_20260715_014443.log`: `enforce_eager=True`,
+   `mode: <CompilationMode.NONE>`, `custom_ops': ['all']`). With `'all'`,
+   `CustomOp.default_on()` is True → `RotaryEmbedding.enabled()` → the
+   dispatcher returns `forward_cuda` (`vllm/model_executor/custom_op.py`,
+   `dispatch_forward`). `forward_cuda` calls the hand-written CUDA rope
+   kernel, whose position gather is raw pointer arithmetic with **no
+   bounds check** (`csrc/libtorch_stable/pos_encoding_kernels.cu:92-93`:
+   `pos = positions[token_idx]; cache_ptr = cos_sin_cache + pos*rot_dim`).
+   So eager mode performs out-of-bounds *reads* past the 2048-row cache —
+   undefined behavior that must be fixed regardless of its measured effect.
+   **However, the consequence we originally predicted ("acceptance should
+   silently degrade") was NOT observed:** the fixed-checkpoint retest
+   (max_position_embeddings 2048→8192, compilation ON, no OOB possible)
+   measured tau = 1.144 at 7.4k context — statistically identical to the
+   eager/stock run (1.1441). The long-context tau collapse is a property
+   of the drafter at this context length, not of the OOB reads; whatever
+   bytes the OOB gather returns, they made no measurable difference to
+   acceptance in our runs. GPU instrumentation to characterize the actual
+   returned values is in `scripts/debug_rope_oob.py` (pending run).
 
 5. **Why `--max-num-batched-tokens` never mattered.**
    The assert bound is the rope cache size, which comes only from the draft
@@ -135,7 +155,7 @@ eagle3 draft config. Contained; rope cache memory cost is trivial.
 > 1. The EAGLE-3 draft model is built from the **draft checkpoint's own hf_config** (`vllm/model_executor/models/llama_eagle3.py:142`). `yuhuili/EAGLE3-LLaMA3.1-Instruct-8B` declares `max_position_embeddings: 2048`.
 > 2. That value flows through `LlamaAttention` → `get_rope(max_position=...)` (`vllm/model_executor/models/llama.py:266, 243–245`), so the draft's `cos_sin_cache` has exactly 2048 rows (`vllm/model_executor/layers/rotary_embedding/base.py:97`).
 > 3. The crash is the gather `cos_sin_cache.index_select(0, positions)` (`base.py:173`). Under compilation Inductor emits a Triton bounds assert — hence the exact `< 2048` message the moment any draft position reaches 2048. This is fully decoupled from `--max-num-batched-tokens`, which is why raising it never helped.
-> 4. `--enforce-eager` only *hides* the bug: the eager path uses the CUDA rope kernel (`base.py:221`), which reads out of bounds unchecked. Output stays correct (rejection sampling), but drafts at positions ≥ 2048 get garbage rotations, so acceptance should silently degrade on long contexts.
+> 4. `--enforce-eager` only *hides* the bug: with compilation mode NONE the custom-ops default resolves to `'all'` (`vllm/config/vllm.py` `__post_init__`; visible in our eager server log as `custom_ops': ['all']`), so `RotaryEmbedding` dispatches to `forward_cuda`, whose position gather is unchecked pointer arithmetic (`csrc/libtorch_stable/pos_encoding_kernels.cu:92-93`) — an out-of-bounds *read* for every draft position ≥ 2048. Undefined behavior worth fixing on its own. One honest empirical note: in our measurements the OOB reads did not measurably change acceptance — a retest with the draft config's `max_position_embeddings` raised to 8192 and compilation ON gave the same accepted length (tau ≈ 1.14 at ~7.4k-token context) as the eager/stock run, so the low long-context acceptance we observe appears to be a property of the drafter at this context length, not corruption from the OOB reads.
 > 5. vLLM even computes `draft max_model_len = min(2048, target) = 2048` (`vllm/config/speculative.py:887`), but the v1 runtime never consumes it — the proposer clamps positions with the **target's** `max_model_len` (`vllm/v1/spec_decode/llm_base_proposer.py:79`). So the engine neither sizes the cache correctly nor stops speculating at 2048.
 >
 > This confirms the hypothesis from #21986. Corroborating evidence that the checkpoint value is a training artifact rather than a real limit: sgl-project/SpecForge#249, where editing the draft `config.json` to the target's value restored normal acceptance lengths.
@@ -143,3 +163,41 @@ eagle3 draft config. Contained; rope cache memory cost is trivial.
 > **Workaround:** local copy of the draft checkpoint with `max_position_embeddings` raised to the target's serving length.
 >
 > **Proposed fix:** in `SpeculativeConfig.__post_init__` (or `hf_config_override`), for `method in ("eagle", "eagle3")`, raise `draft hf_config.max_position_embeddings` to at least the target's `max_model_len` before the draft model is built. Happy to send a PR if maintainers agree with this direction — the open question is whether the draft should also inherit the target's `rope_parameters`.
+
+---
+
+## Appendix: dispatch dispute and resolution (2026-07-17)
+
+A review challenged step 4's dispatch claim: reading
+`CustomOp.dispatch_forward()`/`enabled()`, with `custom_ops = ['none']`
+RotaryEmbedding would route to `forward_native` (checked `index_select`),
+not `forward_cuda` — and a server log appeared to show `['none']` under
+eager. Resolution, verified against the v0.24.0 tree and our own logs:
+
+- The `custom_ops: ['none']` observation came from the **crashing compiled
+  server's** log (`server_20260715_004237.log`: `enforce_eager=False`,
+  `mode: VLLM_COMPILE`). The **successful eager** server's log
+  (`server_20260715_014443.log`) shows `enforce_eager=True`,
+  `mode: NONE`, `custom_ops': ['all']`.
+- The resolution point is `VllmConfig.__post_init__`
+  (`vllm/config/vllm.py`): `'none'` is appended only when
+  `backend == "inductor" and mode != CompilationMode.NONE`; otherwise
+  `'all'`. `--enforce-eager` forces mode NONE → `'all'` → `enabled()` True
+  → `forward_cuda`.
+- Independent consistency check: if eager HAD dispatched to
+  `forward_native`, the OOB `index_select` would device-assert on CUDA the
+  same way compiled mode does — and our eager runs completed. The absence
+  of an eager crash is itself evidence for the unchecked-kernel path.
+- What the challenge DID catch: our original consequence claim
+  ("acceptance should silently degrade") was an unverified prediction, and
+  the fixed-checkpoint retest falsified it (tau identical, 1.144 vs
+  1.1441). Step 4 and the draft comment now state the measured reality.
+
+**Empirical confirmation pending:** `scripts/debug_rope_oob.py` (subprocess
+-isolated GPU probes) instruments the actual object vLLM builds: resolved
+custom_ops + selected forward method, forward_cuda values at positions
+2048..7399 vs an independent math reference (with an 8192-cache control),
+and forward_native's behavior at an OOB position. **Do not post the draft
+comment above until this has run and its output is folded in** — the
+comment's dispatch sentence is source-verified, but the "what the OOB read
+returns" characterization should quote observed values, not inference.

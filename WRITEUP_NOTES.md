@@ -97,10 +97,18 @@ measured — healthy tau (2.83–2.88) on short prompts where all positions < 20
 target's value restored normal acceptance lengths for checkpoints with the same 2048 training
 artifact.
 
-**Until the retest runs, do NOT write "EAGLE-3 is counterproductive at long context" as a
-property of EAGLE-3.** The defensible sentence today: "on the stock checkpoint under vLLM
-0.24.0, EAGLE-3 at 7.4k context is measurably counterproductive (x0.89–0.94) — and our
-source-level diagnosis suggests this is a fixable metadata bug, not a fundamental limit."
+**RETEST RUN (2026-07-17) — settled, safe to write as a property of this drafter.** Local
+draft checkpoint with `max_position_embeddings` patched 2048→8192, `--speculative-config`
+pointed at it, compilation ON (no `--enforce-eager`): the crash is gone (confirms the
+diagnosis), but tau came back at 1.144 — statistically identical to the original
+broken-config measurement, not the healthy ~2.85 short-context reference. Fixing the RoPE
+bug did not move tau. **The write-up can now say plainly: "EAGLE-3 (this checkpoint) is
+measurably counterproductive at 7.4k-token context — x0.89–0.94 vs no-spec, tau collapses
+2.85→1.14 — and this is a real property of the drafter on this workload, not an artifact of
+the vLLM crash-workaround."** The two issues are separate: the RoPE/crash bug is still real
+and worth reporting upstream (a server should never crash on a long prompt), but it is not
+the explanation for the acceptance collapse. Old framing below, superseded, kept for the
+record of how the question was resolved:
 
 Retest recipe (15 min GPU, one throwaway config): local copy of
 `yuhuili/EAGLE3-LLaMA3.1-Instruct-8B` with `config.json` `max_position_embeddings: 2048 -> 8192`,
@@ -129,3 +137,32 @@ fp16kv c1 corner. Outcomes:
   FlashInfer-backend numerics switch that rides along with K (the backend was cleared for
   speed, ~0.2%, but never isolated for quality). Honest write-up framing: a replicated,
   in-sample effect with two candidate mechanisms — do not oversell causally.
+
+---
+
+## Retest verdict + a corrected mechanism claim (2026-07-17)
+
+**The tau collapse is REAL — the RoPE bug did not cause it.** The fixed-checkpoint retest
+(draft config `max_position_embeddings` 2048→8192, compilation ON so no out-of-bounds access is
+possible) reproduced tau ≈ 1.144 at 7.4k context, statistically identical to the original
+eager/stock measurement (1.1441). The previous note's "may flip the headline" scenario did NOT
+materialize: "EAGLE-3's acceptance collapses at long context" stands as a drafter property, now
+with the strongest falsification attempt behind it (4-cell replication queued for the same
+statistical footing as the original; single cell confirmed). The residual open nuance stays the
+one already recorded in the diagnosis: the draft config carries no `rope_parameters`/llama3
+scaling while the target uses it — noted, unexplored, don't claim beyond the data.
+
+**Corrected along the way (keep the write-up honest):** the diagnosis originally predicted the
+eager OOB reads should "silently degrade acceptance." Measured: they didn't — tau identical with
+and without the possibility of OOB reads. The eager path DOES dispatch to the unchecked CUDA
+kernel (source-verified: `--enforce-eager` → mode NONE → `custom_ops=['all']` per
+`vllm/config/vllm.py`, visible in our own eager server log; kernel gather is raw pointer
+arithmetic, `csrc/libtorch_stable/pos_encoding_kernels.cu:92-93`) — an undefined-behavior read
+worth reporting regardless — but its measured effect on acceptance was nil. A review challenge
+claimed eager routes to the checked native path instead; that was traced to reading the
+*compiled* server's log (`custom_ops: ['none']`, `enforce_eager=False`) rather than the eager
+one (`['all']`, `enforce_eager=True`). Empirical instrumentation (`scripts/debug_rope_oob.py`,
+cell added to the retest notebook) will characterize the actual OOB values; the GitHub comment
+is on hold until it runs. Write-up moral, worth a paragraph: a mechanistically plausible,
+source-cited prediction ("garbage rotations → degraded acceptance") still failed measurement —
+cite-and-verify beats cite-and-infer even when the source reading is correct.

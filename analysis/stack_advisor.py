@@ -88,19 +88,17 @@ FINDINGS: Dict[str, Dict[str, str]] = {
                  "acceptance",
         "source": "phase2_marginals_report.md"},
     "D2-S-long": {
-        "claim": "EAGLE-3 is COUNTERPRODUCTIVE at 7.4k context on the "
-                 "stock checkpoint + vLLM 0.24.0: x0.94 at conc 1, x0.89 "
-                 "at conc 8 vs no-spec baseline (same eager regime); tau "
-                 "collapses 2.85 -> 1.14. PENDING RETEST: source-level "
-                 "diagnosis (analysis/vllm_2048_bug_diagnosis.md) shows "
-                 "the draft checkpoint's max_position_embeddings=2048 "
-                 "under-sizes its RoPE cache, and eager mode silently "
-                 "reads GARBAGE rotations for draft positions >= 2048 -- "
-                 "the tau collapse may be this bug, not the drafter. "
-                 "Config-edit retest queued; advice stands for stock "
-                 "deployments meanwhile",
-        "source": "phase3c diagnostics + k_stress KS-probe + "
-                  "vllm_2048_bug_diagnosis.md"},
+        "claim": "EAGLE-3 is COUNTERPRODUCTIVE at 7.4k context: x0.94 at "
+                 "conc 1, x0.89 at conc 8 vs no-spec baseline (same eager "
+                 "regime); tau collapses 2.85 -> 1.14. CONFIRMED REAL by "
+                 "the 2026-07-17 retest: with the draft RoPE-cache bug "
+                 "fixed (max_position_embeddings 2048->8192, compilation "
+                 "ON) tau is unchanged at 1.144 -- a drafter property on "
+                 "long unique documents, independent of the crash bug "
+                 "(analysis/vllm_2048_bug_diagnosis.md). 4-cell "
+                 "replication pending for full statistical footing",
+        "source": "phase3c diagnostics + k_stress KS-probe + tau-retest "
+                  "(notebook cell output; records pending)"},
     "QUAL-S": {
         "claim": "EAGLE-3 under greedy decoding is quality-free (measured "
                  "bit-identical accuracy spec-on vs spec-off; theoretical "
@@ -181,11 +179,10 @@ def recommend(gpu: str = "a100-40gb", native_fp8: bool = False,
             "acceptance collapses (tau 2.85 -> 1.14) once prompts leave the "
             "drafter's distribution; ~77% of draft compute is discarded",
             ["D2-S-long"],
-            ["PENDING RETEST: the tau collapse may be vLLM's draft RoPE-cache "
-             "bug (garbage rotations past position 2048, see "
-             "analysis/vllm_2048_bug_diagnosis.md), not the drafter; a "
-             "checkpoint config-edit retest is queued and could flip "
-             "this verdict"]))
+            ["retest-confirmed (2026-07-17): tau unchanged with the draft "
+             "RoPE-cache bug fixed -- a drafter property, not the crash "
+             "bug; a drafter trained on long-context data could still "
+             "change this"]))
     elif saturated and workload != "code":
         recs.append(Recommendation(
             "S (EAGLE-3)", "OFF",

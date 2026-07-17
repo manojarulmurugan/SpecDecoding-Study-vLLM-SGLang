@@ -130,11 +130,28 @@ compiled mode asserts on the gather past 2048, eager mode reads OUT OF
 BOUNDS silently. Draft GitHub comment for #48894 is at the bottom of that
 file — user posts it.
 
-**OPEN CAVEAT gating the write-up headline (do not lose): tau=1.14 may be
-the RoPE bug, not the drafter.** The diagnosis predicts exactly what 3c
-measured: healthy tau below position 2048 (short-context eager 2.85),
-garbage rotations => collapsed tau above it (long-context 1.14). The
-S-counterproductive-at-long-context finding is therefore PENDING a retest:
+**CAVEAT SETTLED (2026-07-17): tau=1.14 is real, NOT the RoPE bug.**
+Retest run (colab/phase3c_diagnostics_40gb_τ_retest.ipynb, local draft
+checkpoint with max_position_embeddings 2048->8192, compilation ON, no
+--enforce-eager): server did NOT crash (confirms the crash diagnosis is
+correct) but tau came back at 1.144 -- statistically identical to the
+original broken-config eager measurement. If the RoPE bug were the cause
+of the low tau, fixing it should have moved tau toward the healthy ~2.85
+short-context reference; it did not move at all. Conclusion: EAGLE-3's
+low acceptance at 7.4k-token context is a real property of this drafter
+on this workload (out-of-distribution on long unique documents), fully
+independent of the crash bug. The "S is counterproductive at long
+context" finding is CONFIRMED, not an artifact -- safe to state plainly
+in the write-up. The crash bug remains real and worth reporting upstream
+on its own merits (a server should never crash on a long prompt), but no
+longer claim fixing it would also fix long-context S performance -- two
+separate issues that happened to share one config value. Raw retest
+output only lives in the notebook's cell 12 output (the downloaded
+results zip for this session came up empty -- the run wrote to
+/content/retest_results, outside the notebook's normal "preserve
+everything" cell's zip target; note for next time if this retest pattern
+is reused). Old text below, superseded, kept for the record:
+
 download the draft checkpoint locally, edit its config.json
 max_position_embeddings 2048 -> 8192, point --speculative-config's model
 at the local path, re-measure tau at 7.4k context WITH compilation on
@@ -144,6 +161,25 @@ long contexts — and a one-line config edit fixes both crash and
 performance" (arguably a better headline); tau stays low => original
 finding stands. One throwaway config + 1 launch, ~15 min GPU. The advisor
 carries this caveat on D2-S-long until settled.
+
+**Dispatch dispute RESOLVED (2026-07-17, this session): the diagnosis's
+eager-dispatch claim was RIGHT; the challenge misread the logs.** The
+`custom_ops: ['none']` cited against it came from the CRASHING COMPILED
+server's log (004237: enforce_eager=False); the successful EAGER log
+(014443) shows `custom_ops': ['all']`, and `vllm/config/vllm.py`
+`__post_init__` confirms 'none' only under active Inductor — so eager
+dispatches RotaryEmbedding to the unchecked CUDA kernel
+(csrc/libtorch_stable/pos_encoding_kernels.cu:92-93, raw pointer math).
+What the challenge DID catch: the "OOB reads should degrade acceptance"
+prediction was falsified by the retest (tau identical) — diagnosis §4 and
+the draft GitHub comment are corrected accordingly (appendix in
+analysis/vllm_2048_bug_diagnosis.md). **Draft comment is ON HOLD** until
+`scripts/debug_rope_oob.py` (subprocess-isolated GPU probes; cell added to
+the τ-retest notebook after its sweep cell) reports the actually-observed
+OOB values. Still pending from that same session: the 4-cell replication
+sweep (cells 11-12 of the retest notebook have never executed; the results
+dir in the repo is EMPTY — the single-cell tau=1.144 lives only in
+notebook cell-12 output per the note above).
 
 Phase 5 progress: `analysis/stack_advisor.py` BUILT (scenario CLI with
 per-recommendation provenance + `--validate`, which recomputes every
