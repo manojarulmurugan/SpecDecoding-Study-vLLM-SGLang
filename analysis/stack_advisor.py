@@ -44,10 +44,20 @@ FINDINGS: Dict[str, Dict[str, str]] = {
                  "plateau vs predicted ~26)",
         "source": "k_stress W-capacity section (40GB)"},
     "QUAL-W": {
-        "claim": "W4A16 costs accuracy: -5 pts GSM8K, -10 pts HumanEval vs "
-                 "FP16, every cell checked; the only lever with a real "
+        "claim": "W4A16 costs accuracy: main effect -3.0 to -4.0 pts GSM8K "
+                 "and -6.2 to -7.9 pts HumanEval at every concurrency "
+                 "(toggle-alone up to -10); the only lever with a real "
                  "quality price",
-        "source": "phase3_results/runs measured.accuracy (288 records)"},
+        "source": "phase3_results/quality_effects.json (computed 2^3 "
+                  "contrasts, 3 repeats)"},
+    "QUAL-WK": {
+        "claim": "FP8-KV partially OFFSETS W4A16's quality damage on "
+                 "HumanEval: WK interaction +1.7 to +3.5 pts, per-repeat "
+                 "ranges excluding zero in all 4 concurrency cells (K main "
+                 "itself +1.4 to +2.1 pts there). Mechanism unresolved: KV "
+                 "rounding vs attention-backend numerics (speed-side "
+                 "backend effect measured ~0, quality-side not isolated)",
+        "source": "phase3_results/quality_effects.json"},
     "P2-K-tax": {
         "claim": "FP8-KV alone at short context, below KV ceiling: "
                  "x0.94-0.98 (A100 FP8-emulation tax, no upside)",
@@ -62,10 +72,10 @@ FINDINGS: Dict[str, Dict[str, str]] = {
                  "(bandwidth credit offsets the tax as KV bytes grow)",
         "source": "k_stress conc-8 K-isolation cells"},
     "QUAL-K": {
-        "claim": "FP8-KV accuracy cost ~0 on short-context GSM8K/HumanEval "
-                 "(within 1-2 questions of FP16); NOT yet measured at long "
-                 "context",
-        "source": "phase3_results/runs measured.accuracy"},
+        "claim": "FP8-KV accuracy cost ~0: GSM8K main effect straddles "
+                 "zero at every concurrency; HumanEval slightly POSITIVE "
+                 "(+1.4 to +2.1 pts). NOT yet measured at long context",
+        "source": "phase3_results/quality_effects.json"},
     "P2-S-c1": {
         "claim": "EAGLE-3 alone, short context, conc 1: x1.90 (RAG) / "
                  "x2.13 (GSM8K) / x3.16 (HumanEval) - tracks tau "
@@ -78,11 +88,19 @@ FINDINGS: Dict[str, Dict[str, str]] = {
                  "acceptance",
         "source": "phase2_marginals_report.md"},
     "D2-S-long": {
-        "claim": "EAGLE-3 is COUNTERPRODUCTIVE at 7.4k context: x0.94 at "
-                 "conc 1, x0.89 at conc 8 vs no-spec baseline (same eager "
-                 "regime); tau collapses 2.85 -> 1.14 (drafter "
-                 "out-of-distribution on long RAG documents)",
-        "source": "phase3c diagnostics + k_stress KS-probe"},
+        "claim": "EAGLE-3 is COUNTERPRODUCTIVE at 7.4k context on the "
+                 "stock checkpoint + vLLM 0.24.0: x0.94 at conc 1, x0.89 "
+                 "at conc 8 vs no-spec baseline (same eager regime); tau "
+                 "collapses 2.85 -> 1.14. PENDING RETEST: source-level "
+                 "diagnosis (analysis/vllm_2048_bug_diagnosis.md) shows "
+                 "the draft checkpoint's max_position_embeddings=2048 "
+                 "under-sizes its RoPE cache, and eager mode silently "
+                 "reads GARBAGE rotations for draft positions >= 2048 -- "
+                 "the tau collapse may be this bug, not the drafter. "
+                 "Config-edit retest queued; advice stands for stock "
+                 "deployments meanwhile",
+        "source": "phase3c diagnostics + k_stress KS-probe + "
+                  "vllm_2048_bug_diagnosis.md"},
     "QUAL-S": {
         "claim": "EAGLE-3 under greedy decoding is quality-free (measured "
                  "bit-identical accuracy spec-on vs spec-off; theoretical "
@@ -105,9 +123,10 @@ FINDINGS: Dict[str, Dict[str, str]] = {
     "F3-GAP": {
         "claim": "Speedups do NOT multiply: full-stack interference gap "
                  "x1.30-2.97 (naive product overestimates worst at batch "
-                 "1); quality costs do NOT compound (full stack ~= W's "
-                 "cost alone)",
-        "source": "factorial_report.md interference gaps + accuracy pass"},
+                 "1); quality costs DO add cleanly: full-stack accuracy "
+                 "delta minus sum-of-mains is within 0.7 pts in all 8 "
+                 "measured cells",
+        "source": "factorial_report.md + quality_effects.json"},
     "HW-FP8": {
         "claim": "All K findings are on A100 (FP8 emulated). On native-FP8 "
                  "GPUs (H100+) the emulation tax should vanish and K's "
@@ -162,8 +181,11 @@ def recommend(gpu: str = "a100-40gb", native_fp8: bool = False,
             "acceptance collapses (tau 2.85 -> 1.14) once prompts leave the "
             "drafter's distribution; ~77% of draft compute is discarded",
             ["D2-S-long"],
-            ["measured with the yuhuili EAGLE-3 head; a drafter trained on "
-             "long-context data could change this"]))
+            ["PENDING RETEST: the tau collapse may be vLLM's draft RoPE-cache "
+             "bug (garbage rotations past position 2048, see "
+             "analysis/vllm_2048_bug_diagnosis.md), not the drafter; a "
+             "checkpoint config-edit retest is queued and could flip "
+             "this verdict"]))
     elif saturated and workload != "code":
         recs.append(Recommendation(
             "S (EAGLE-3)", "OFF",
@@ -184,7 +206,8 @@ def recommend(gpu: str = "a100-40gb", native_fp8: bool = False,
 
     # ----- W (AWQ W4A16) ----------------------------------------------
     pressure = _pressure(gpu, "fp16", context_tokens, concurrency, pool_tokens)
-    w_caveats = ["costs accuracy: -5 pts GSM8K / -10 pts HumanEval (QUAL-W)"]
+    w_caveats = ["costs accuracy: -3/-4 pts GSM8K, -6/-8 pts HumanEval "
+                 "(QUAL-W); FP8-KV claws back 2-3 pts on code (QUAL-WK)"]
     if quality_sensitive:
         recs.append(Recommendation(
             "W (AWQ W4A16)", "OFF",
@@ -295,6 +318,154 @@ def render(recs: List[Recommendation], show_provenance: bool = True) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# --validate: recompute each finding's quantitative claim from raw run
+# records and compare against the range the advisor asserts. This is the
+# "tested product" loop: if a rule ever drifts from the data (new runs,
+# edited claims), validation fails loudly instead of the guide rotting.
+# ---------------------------------------------------------------------------
+
+def _load_runs(dirs: List[str]) -> List[dict]:
+    import json as _json
+    import pathlib as _pathlib
+    recs = []
+    for d in dirs:
+        for f in sorted((_pathlib.Path(d) / "runs").glob("*.json")):
+            recs.append(_json.loads(f.read_text()))
+    return recs
+
+
+def _mean_metric(records, key="goodput_tok_s", block=None, workload=None,
+                 conc=None, w=None, k=None, s=None, rid_prefix=None):
+    vals = []
+    for r in records:
+        cfg = r.get("config", {})
+        fac = cfg.get("factors", {})
+        if r.get("status") != "ok":
+            continue
+        if block and cfg.get("block") != block:
+            continue
+        if workload and cfg.get("workload") != workload:
+            continue
+        if conc is not None and int(cfg.get("concurrency", -1)) != conc:
+            continue
+        if w and fac.get("weight_quant") != w:
+            continue
+        if k and fac.get("kv_quant") != k:
+            continue
+        if s and fac.get("spec_decode") != s:
+            continue
+        if rid_prefix and not r.get("run_id", "").startswith(rid_prefix):
+            continue
+        v = r.get("measured", {}).get(key)
+        if v is not None:
+            vals.append(v)
+    return sum(vals) / len(vals) if vals else None
+
+
+def _ratio(records, num_kw, den_kw, key="goodput_tok_s"):
+    n = _mean_metric(records, key=key, **num_kw)
+    d = _mean_metric(records, key=key, **den_kw)
+    return (n / d) if (n and d) else None
+
+
+def _cf(**kw):  # core-factorial gsm8k selector shorthand
+    base = dict(block="core_factorial", workload="gsm8k")
+    base.update(kw)
+    return base
+
+
+# (finding, description, (lo, hi), fmt, compute(records) -> float|None)
+VALIDATIONS = [
+    ("P2-S-c1", "S toggle, GSM8K conc 1", (1.8, 2.5), "x%.2f",
+     lambda r: _ratio(r, _cf(conc=1, w="fp16", k="fp16", s="eagle3"),
+                      _cf(conc=1, w="fp16", k="fp16", s="none"))),
+    ("P2-W-c1", "W toggle, GSM8K conc 1", (1.8, 2.3), "x%.2f",
+     lambda r: _ratio(r, _cf(conc=1, w="w4a16", k="fp16", s="none"),
+                      _cf(conc=1, w="fp16", k="fp16", s="none"))),
+    ("P2-K-tax", "K toggle, GSM8K conc 1", (0.88, 1.00), "x%.2f",
+     lambda r: _ratio(r, _cf(conc=1, w="fp16", k="fp8", s="none"),
+                      _cf(conc=1, w="fp16", k="fp16", s="none"))),
+    ("F3-KS", "K-under-S, GSM8K conc 1", (0.55, 0.78), "x%.2f",
+     lambda r: _ratio(r, _cf(conc=1, w="fp16", k="fp8", s="eagle3"),
+                      _cf(conc=1, w="fp16", k="fp16", s="eagle3"))),
+    ("F3-W-rev", "W toggle, GSM8K conc 64", (0.85, 1.02), "x%.2f",
+     lambda r: _ratio(r, _cf(conc=64, w="w4a16", k="fp16", s="none"),
+                      _cf(conc=64, w="fp16", k="fp16", s="none"))),
+    ("F3-GAP", "naive/measured full stack, GSM8K conc 1", (2.5, 3.3), "x%.2f",
+     lambda r: (lambda b, W, K, S, F:
+                ((W / b) * (K / b) * (S / b)) / (F / b)
+                if all((b, W, K, S, F)) else None)(
+         _mean_metric(r, **_cf(conc=1, w="fp16", k="fp16", s="none")),
+         _mean_metric(r, **_cf(conc=1, w="w4a16", k="fp16", s="none")),
+         _mean_metric(r, **_cf(conc=1, w="fp16", k="fp8", s="none")),
+         _mean_metric(r, **_cf(conc=1, w="fp16", k="fp16", s="eagle3")),
+         _mean_metric(r, **_cf(conc=1, w="w4a16", k="fp8", s="eagle3")))),
+    ("QUAL-W", "W accuracy delta, HumanEval (pts, pooled conc)",
+     (-12.0, -6.0), "%+.1f pts",
+     lambda r: (lambda a, b: (a - b) * 100 if (a and b) else None)(
+         _mean_metric(r, key="accuracy", block="core_factorial",
+                      workload="humaneval", w="w4a16", k="fp16", s="none"),
+         _mean_metric(r, key="accuracy", block="core_factorial",
+                      workload="humaneval", w="fp16", k="fp16", s="none"))),
+    ("QUAL-S", "S accuracy delta, GSM8K (pts, pooled conc)",
+     (-1.5, 1.5), "%+.1f pts",
+     lambda r: (lambda a, b: (a - b) * 100 if (a and b) else None)(
+         _mean_metric(r, key="accuracy", block="core_factorial",
+                      workload="gsm8k", w="fp16", k="fp16", s="eagle3"),
+         _mean_metric(r, key="accuracy", block="core_factorial",
+                      workload="gsm8k", w="fp16", k="fp16", s="none"))),
+    ("3b-K-cap", "K toggle at capacity, k_stress conc 48", (1.10, 1.30),
+     "x%.2f",
+     lambda r: _ratio(r,
+                      dict(block="k_stress", conc=48, w="fp16", k="fp8",
+                           s="none"),
+                      dict(block="k_stress", conc=48, w="fp16", k="fp16",
+                           s="none"))),
+    ("D2-S-long", "S toggle at 7.4k ctx, eager, conc 8", (0.80, 0.97),
+     "x%.2f",
+     lambda r: _ratio(r,
+                      dict(block="k_stress", conc=8, w="fp16", k="fp16",
+                           s="eagle3"),
+                      dict(block="diagnostics", conc=8,
+                           rid_prefix="diag_slong-eager-base"))),
+    ("D2-S-long", "tau, short-context eager (healthy ref)", (2.4, 3.1),
+     "%.2f",
+     lambda r: _mean_metric(r, key="accepted_length_tau",
+                            block="diagnostics",
+                            rid_prefix="diag_tau-eager-short")),
+]
+
+
+def run_validation(dirs: List[str]) -> int:
+    records = _load_runs(dirs)
+    print("# stack-advisor --validate: %d records from %s"
+          % (len(records), ", ".join(dirs)))
+    print()
+    print("| finding | check | predicted | measured | verdict |")
+    print("|---|---|---|---|---|")
+    failures = 0
+    for fid, name, (lo, hi), fmt, compute in VALIDATIONS:
+        measured = compute(records)
+        pred = "%s..%s" % (fmt % lo, fmt % hi)
+        if measured is None:
+            print("| %s | %s | %s | - | SKIPPED (no records) |"
+                  % (fid, name, pred))
+            continue
+        ok = lo <= measured <= hi
+        failures += 0 if ok else 1
+        print("| %s | %s | %s | %s | %s |"
+              % (fid, name, pred, fmt % measured,
+                 "PASS" if ok else "FAIL"))
+    print()
+    print("PASS: advisor claims consistent with the records provided."
+          if failures == 0 else
+          "FAIL: %d claim(s) outside their predicted range - fix the "
+          "finding or explain the regression before shipping advice."
+          % failures)
+    return 0 if failures == 0 else 1
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(
         description="Measured-data-backed vLLM optimization-stack advisor")
@@ -312,7 +483,14 @@ def main(argv=None) -> int:
                    help="override the measured KV pool estimate")
     p.add_argument("--list-findings", action="store_true")
     p.add_argument("--no-provenance", action="store_true")
+    p.add_argument("--validate", nargs="+", metavar="RESULTS_DIR",
+                   help="recompute the findings' quantitative claims from "
+                        "raw run records and PASS/FAIL each against its "
+                        "predicted range (e.g. --validate phase3_results)")
     args = p.parse_args(argv)
+
+    if args.validate:
+        return run_validation(args.validate)
 
     if args.list_findings:
         for fid, f in FINDINGS.items():

@@ -90,3 +90,31 @@ def test_cli_renders_with_stack_rules(capsys):
     assert "NEVER multiply" in out
     assert "Scope:" in out
     assert main(["--list-findings"]) == 0
+
+
+def test_validate_passes_on_committed_factorial(capsys):
+    # phase3_results is committed: the 8 factorial-backed checks must PASS
+    # and the k_stress/diagnostics checks must SKIP (their dirs not given),
+    # never FAIL.
+    assert main(["--validate", "phase3_results"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("PASS |") >= 8
+    assert "FAIL" not in out.split("PASS:")[0].replace("PASS/FAIL", "")
+    assert "SKIPPED" in out
+
+
+def test_validate_fails_on_contradicting_records(tmp_path, capsys):
+    import json
+    (tmp_path / "runs").mkdir()
+    # fabricate a world where S at conc 1 does nothing: P2-S-c1 must FAIL
+    for i, (s, g) in enumerate([("none", 100.0), ("eagle3", 100.0)]):
+        rec = {"run_id": "t%d" % i, "status": "ok", "env": {},
+               "config": {"block": "core_factorial", "workload": "gsm8k",
+                          "concurrency": 1, "repeat_idx": 0,
+                          "factors": {"weight_quant": "fp16",
+                                      "kv_quant": "fp16",
+                                      "spec_decode": s}},
+               "measured": {"goodput_tok_s": g}}
+        (tmp_path / "runs" / ("t%d.json" % i)).write_text(json.dumps(rec))
+    assert main(["--validate", str(tmp_path)]) == 1
+    assert "FAIL" in capsys.readouterr().out

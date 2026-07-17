@@ -114,21 +114,48 @@ UNBLOCKED pending the user's next 40GB session.
 
 **Phase 3c diagnostics: DONE 2026-07-16, 9/9 ok-or-informative (results in
 phase3c_diagnostics_results/, full verdicts in PREREQ 2026-07-16 entry).**
-(1) tau=1.14 is REAL (eager short-context tau 2.83/2.88 — eager innocent);
+(1) eager mode itself is innocent (short-context eager tau 2.83/2.88);
 (2) EAGLE-3 measured COUNTERPRODUCTIVE at 7.4k context (S = x0.94 at c1,
-x0.89 at c8 vs no-spec eager baseline) — decision-guide + write-up
-headline; (3) crash bisection final: inductor-compiled eagle_head kernel
-bug, NOT cudagraph capture (cudagraph_mode=NONE still asserts; kernel
-bound 2048 even with budget 8192) — upstream issue FILED:
+x0.89 at c8 vs no-spec eager baseline); (3) crash bisection: NOT cudagraph
+capture (cudagraph_mode=NONE still asserts; kernel bound 2048 even with
+budget 8192) — upstream issue FILED:
 github.com/vllm-project/vllm/issues/48894; (4) attention-backend confound
-cleared (~0.2%): K effects are genuinely KV precision.
+cleared for SPEED (~0.2%): K goodput effects are genuinely KV precision.
 
-Then: Phase 5 deliverables — `analysis/stack_advisor.py` (the decision
-guide as a provenance-carrying CLI; quality axis is a hard requirement,
-see below; plus a quality-side factorial pass over the EXISTING phase3
-records — measured.accuracy is recorded in all 288); Phase 4 (SGLang RAG
-seam, optional); write-up series (the debugging archives in colab/ are
-deliberate material for the "reproducing research" post).
+**vLLM crash root cause: RESOLVED side-thread (2026-07-17).** Source-level
+diagnosis in `analysis/vllm_2048_bug_diagnosis.md`, every file:line
+independently re-verified against a fresh v0.24.0 clone: the draft
+checkpoint's max_position_embeddings=2048 sizes the draft RoPE cache;
+compiled mode asserts on the gather past 2048, eager mode reads OUT OF
+BOUNDS silently. Draft GitHub comment for #48894 is at the bottom of that
+file — user posts it.
+
+**OPEN CAVEAT gating the write-up headline (do not lose): tau=1.14 may be
+the RoPE bug, not the drafter.** The diagnosis predicts exactly what 3c
+measured: healthy tau below position 2048 (short-context eager 2.85),
+garbage rotations => collapsed tau above it (long-context 1.14). The
+S-counterproductive-at-long-context finding is therefore PENDING a retest:
+download the draft checkpoint locally, edit its config.json
+max_position_embeddings 2048 -> 8192, point --speculative-config's model
+at the local path, re-measure tau at 7.4k context WITH compilation on
+(also proves the crash fix end-to-end). tau back near ~2.5-2.85 => the
+finding flips to "a checkpoint metadata bug silently destroys EAGLE-3 on
+long contexts — and a one-line config edit fixes both crash and
+performance" (arguably a better headline); tau stays low => original
+finding stands. One throwaway config + 1 launch, ~15 min GPU. The advisor
+carries this caveat on D2-S-long until settled.
+
+Phase 5 progress: `analysis/stack_advisor.py` BUILT (scenario CLI with
+per-recommendation provenance + `--validate`, which recomputes every
+quantitative claim from raw records: 11/11 PASS against the 337 records on
+disk); quality-side factorial BUILT (`analysis/quality_factorial.py`,
+computed 2^3 accuracy contrasts -> phase3_results/quality_effects.json;
+headline: quality does NOT compound, |excess| <= 0.7 pts in all 8 cells; W
+main -3/-4 pts GSM8K and -6/-8 pts HumanEval; NEW ROBUST FINDING: WK
+interaction POSITIVE on HumanEval +1.7..+3.5 pts in all 4 cells — FP8-KV
+partially offsets W4A16's quality damage, mechanism unresolved). Remaining
+Phase 5: write-up series; prose DECISION_GUIDE.md distilled from the
+advisor findings (small). Phase 4 (SGLang RAG seam) still optional/open.
 
 **Decision-guide requirement (2026-07-15, verified against phase3_results/runs/):
 the three levers do NOT cost the same thing on the quality axis — this must be

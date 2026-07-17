@@ -82,3 +82,50 @@ compile on; kernel bound stays 2048 even when the token budget is 8192. It's an
 inductor-compiled eagle_head kernel bug; eager is the only working mode in 0.24.0.
 Upstream issue material, and an honest "what it cost us" beat for the debugging post
 (the 8 probe cells run eager; ratios/tau comparable, absolute tok/s not).
+
+---
+
+## CAVEAT that may flip a headline: tau=1.14 might be the RoPE bug, not the drafter (2026-07-17)
+
+The source-level crash diagnosis (`analysis/vllm_2048_bug_diagnosis.md`, independently
+re-verified against a fresh v0.24.0 clone) has a consequence beyond the crash: in eager mode
+the draft's rope kernel reads **out of bounds without any check**, so every draft token at
+position >= 2048 gets garbage cos/sin rotations. That mechanism *predicts* exactly what Phase 3c
+measured — healthy tau (2.83–2.88) on short prompts where all positions < 2048, collapsed tau
+(1.14) at 7.4k context where nearly all draft positions >= 2048. Outside corroboration
+(sgl-project/SpecForge#249): editing a draft checkpoint's `max_position_embeddings` to the
+target's value restored normal acceptance lengths for checkpoints with the same 2048 training
+artifact.
+
+**Until the retest runs, do NOT write "EAGLE-3 is counterproductive at long context" as a
+property of EAGLE-3.** The defensible sentence today: "on the stock checkpoint under vLLM
+0.24.0, EAGLE-3 at 7.4k context is measurably counterproductive (x0.89–0.94) — and our
+source-level diagnosis suggests this is a fixable metadata bug, not a fundamental limit."
+
+Retest recipe (15 min GPU, one throwaway config): local copy of
+`yuhuili/EAGLE3-LLaMA3.1-Instruct-8B` with `config.json` `max_position_embeddings: 2048 -> 8192`,
+`--speculative-config` model pointed at the local path, compilation ON, re-run the KS-probe
+fp16kv c1 corner. Outcomes:
+- **tau recovers to ~2.5+**: headline upgrades to "a one-line checkpoint metadata bug silently
+  destroys speculative decoding on long contexts (crash under compile, silent perf collapse
+  under eager) — diagnosis, fix, and upstream report." Both the crash AND the perf finding
+  resolve to one root cause. QuantSpec juxtaposition (earlier note) softens accordingly: the
+  drafter was never given a fair long-context shot, though QuantSpec's structural-acceptance
+  argument still stands on its own merits.
+- **tau stays ~1.1**: original finding stands untouched, now with the strongest possible
+  falsification attempt behind it.
+
+## Quality-side factorial: computed, and it found something (2026-07-17)
+
+`analysis/quality_factorial.py` over all 288 records (`phase3_results/quality_effects.json`):
+- **Quality does not compound**: full-stack accuracy delta minus sum-of-mains is within 0.7 pts
+  in all 8 workload x concurrency cells. Pairs with the speed side's x1.3–3.0 interference gap
+  as one write-up beat: *speed interferes, quality adds.*
+- W main: -3.0..-4.0 pts (GSM8K), -6.2..-7.9 pts (HumanEval), every concurrency. S main: |<=0.7|
+  pts everywhere (greedy guarantee, now measured as a computed contrast, not a spot check).
+- **New robust finding: WK > 0 on HumanEval in all 4 concurrency cells (+1.7..+3.5 pts,
+  per-repeat ranges exclude zero; K main there +1.4..+2.1)** — FP8-KV *recovers* part of
+  W4A16's code-accuracy damage. Mechanism unresolved: KV rounding acting favorably vs the
+  FlashInfer-backend numerics switch that rides along with K (the backend was cleared for
+  speed, ~0.2%, but never isolated for quality). Honest write-up framing: a replicated,
+  in-sample effect with two candidate mechanisms — do not oversell causally.
