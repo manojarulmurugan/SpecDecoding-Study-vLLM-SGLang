@@ -205,8 +205,22 @@ headline: quality does NOT compound, |excess| <= 0.7 pts in all 8 cells; W
 main -3/-4 pts GSM8K and -6/-8 pts HumanEval; NEW ROBUST FINDING: WK
 interaction POSITIVE on HumanEval +1.7..+3.5 pts in all 4 cells — FP8-KV
 partially offsets W4A16's quality damage, mechanism unresolved). Remaining
-Phase 5: write-up series; prose DECISION_GUIDE.md distilled from the
-advisor findings (small). Phase 4 (SGLang RAG seam) still optional/open.
+Phase 5: write-up series. Phase 4 (SGLang RAG seam) still optional/open.
+
+**DECISION_GUIDE.md + README rewrite DRAFTED (2026-07-18), awaiting user
+review before the write-up series.** DECISION_GUIDE.md is the prose
+distillation of stack_advisor (scenario tables, plain-language mechanisms,
+same finding IDs as the CLI, provenance table linking each ID to its
+committed report, honest where-the-data-stops section). README.md rewritten
+portfolio-ready: pitch + badges (177 tests — count verified by running the
+suite; 397 measured runs = 8+48+288+40+9+4 counted on disk; 11/11 validate
+re-run and passing), headline findings, results-in-depth tables (numbers
+pulled from the committed phase reports, not memory), three debugging
+stories, repo map, scope, reading order; all prereq-check/scaffolding
+sections cut (PREREQ_RESULTS.md remains the source of truth). New measured
+number surfaced for the guide, computed from phase3_results/runs: the W+S
+pair at conc 1 = x3.01 GSM8K / x5.23 HumanEval / x2.98 RAG (best measured
+stack in the study; full WKS = x1.40/2.28/1.38 — K halves it on A100).
 
 **Decision-guide requirement (2026-07-15, verified against phase3_results/runs/):
 the three levers do NOT cost the same thing on the quality axis — this must be
