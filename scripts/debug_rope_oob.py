@@ -70,7 +70,11 @@ def _reference_rotate(q, pos: int, head_size: int, base: float = 10000.0):
 
 def _build_rope(max_position: int):
     """Instantiate the same object vLLM builds for the draft head, under an
-    eager-equivalent config context. Returns (rope, resolved_custom_ops)."""
+    eager-equivalent config context. Returns (rope, resolved_custom_ops,
+    vcfg) — callers that consult CustomOp class methods afterwards (e.g.
+    .enabled(), which asserts a current vLLM config) must re-enter
+    set_current_vllm_config(vcfg) around those calls; the 2026-07-17 GPU
+    run showed the build-time context does not stay active for them."""
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     try:
@@ -79,27 +83,29 @@ def _build_rope(max_position: int):
     except Exception:
         mode_none = 0
     vcfg = VllmConfig(compilation_config=CompilationConfig(mode=mode_none))
-    ctx = set_current_vllm_config(vcfg)
-    ctx.__enter__()  # keep active: CustomOp reads it at BUILD time
-    from vllm.model_executor.layers.rotary_embedding import get_rope
-    rope = get_rope(
-        head_size=HEAD_SIZE,
-        max_position=max_position,
-        is_neox_style=True,
-        rope_parameters={"rope_type": "default", "rope_theta": 10000.0},
-        dtype=torch.float32,
-    ).cuda()
-    return rope, list(vcfg.compilation_config.custom_ops)
+    with set_current_vllm_config(vcfg):
+        from vllm.model_executor.layers.rotary_embedding import get_rope
+        rope = get_rope(
+            head_size=HEAD_SIZE,
+            max_position=max_position,
+            is_neox_style=True,
+            rope_parameters={"rope_type": "default", "rope_theta": 10000.0},
+            dtype=torch.float32,
+        ).cuda()
+    return rope, list(vcfg.compilation_config.custom_ops), vcfg
 
 
 def probe_dispatch() -> dict:
-    rope, custom_ops = _build_rope(CACHE_LIMIT)
+    from vllm.config import set_current_vllm_config
+    rope, custom_ops, vcfg = _build_rope(CACHE_LIMIT)
     method = getattr(rope, "_forward_method", None)
     name = getattr(method, "__name__", str(method))
+    with set_current_vllm_config(vcfg):  # .enabled() asserts a current config
+        enabled = type(rope).enabled()
     return {
         "rope_class": type(rope).__name__,
         "resolved_custom_ops": custom_ops,
-        "enabled": type(rope).enabled(),
+        "enabled": enabled,
         "dispatched_to": name,
         "cache_rows": int(rope.cos_sin_cache.shape[0]),
     }
@@ -128,13 +134,13 @@ def _run_positions(rope, positions, fn_name: str) -> dict:
 
 
 def probe_cuda() -> dict:
-    rope, _ = _build_rope(CACHE_LIMIT)
+    rope, _, _ = _build_rope(CACHE_LIMIT)
     return {"forward_cuda": _run_positions(rope, IN_BOUNDS + OOB,
                                            "forward_cuda")}
 
 
 def probe_native() -> dict:
-    rope, _ = _build_rope(CACHE_LIMIT)
+    rope, _, _ = _build_rope(CACHE_LIMIT)
     # one in-bounds control, one OOB: is the native gather checked on CUDA?
     return {"forward_native": _run_positions(rope, [2047, 2048],
                                              "forward_native")}
@@ -142,7 +148,7 @@ def probe_native() -> dict:
 
 def probe_control() -> dict:
     """Sanity: a correctly-sized cache must be CORRECT at every position."""
-    rope, _ = _build_rope(FULL_LIMIT)
+    rope, _, _ = _build_rope(FULL_LIMIT)
     return {"forward_cuda_8192cache": _run_positions(
         rope, IN_BOUNDS + OOB, "forward_cuda")}
 
@@ -182,9 +188,15 @@ def main() -> int:
     print()
     print("#" * 8, "VERDICT", "#" * 8)
     d = results.get("dispatch", {})
-    print("Under eager-equivalent config, custom_ops resolves to %s and "
-          "RotaryEmbedding dispatches to: %s"
-          % (d.get("resolved_custom_ops"), d.get("dispatched_to")))
+    if d.get("dispatched_to"):
+        print("Under eager-equivalent config, custom_ops resolves to %s and "
+              "RotaryEmbedding dispatches to: %s"
+              % (d.get("resolved_custom_ops"), d.get("dispatched_to")))
+    else:
+        print("dispatch probe unavailable -- rely on the cuda/native "
+              "probes: native RAISES at the boundary while real eager "
+              "runs never crashed, which excludes forward_native and "
+              "proves the forward_cuda dispatch by elimination.")
     cuda = results.get("cuda", {}).get("forward_cuda", {})
     if cuda:
         ib = [str(p) for p in IN_BOUNDS if cuda.get(p, cuda.get(str(p), {})).get("verdict") == "CORRECT"]

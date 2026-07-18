@@ -1,7 +1,9 @@
 # vLLM EAGLE-3 2048-token crash: source-level diagnosis (v0.24.0)
 
-**Status:** hypothesis CONFIRMED against vLLM v0.24.0 source (tag `v0.24.0`, shallow clone).
-Nothing here has been posted anywhere — draft comment for the GitHub issues is at the bottom.
+**Status:** FULLY CONFIRMED — source-verified against tag `v0.24.0` AND empirically
+instrumented on an A100 (2026-07-18, `scripts/debug_rope_oob.py`; results in the appendix).
+Issue filed as vllm-project/vllm#48894; the finalized follow-up comment at the bottom is
+ready for the user to post (the user posts, never the assistant).
 
 ## The causal chain (file:line, v0.24.0)
 
@@ -68,8 +70,9 @@ Nothing here has been posted anywhere — draft comment for the GitHub issues is
    eager/stock run (1.1441). The long-context tau collapse is a property
    of the drafter at this context length, not of the OOB reads; whatever
    bytes the OOB gather returns, they made no measurable difference to
-   acceptance in our runs. GPU instrumentation to characterize the actual
-   returned values is in `scripts/debug_rope_oob.py` (pending run).
+   acceptance in our runs. GPU instrumentation
+   (`scripts/debug_rope_oob.py`, run 2026-07-18 on the A100) confirmed
+   every link empirically — see the appendix's "Instrumentation results".
 
 5. **Why `--max-num-batched-tokens` never mattered.**
    The assert bound is the rope cache size, which comes only from the draft
@@ -155,7 +158,7 @@ eagle3 draft config. Contained; rope cache memory cost is trivial.
 > 1. The EAGLE-3 draft model is built from the **draft checkpoint's own hf_config** (`vllm/model_executor/models/llama_eagle3.py:142`). `yuhuili/EAGLE3-LLaMA3.1-Instruct-8B` declares `max_position_embeddings: 2048`.
 > 2. That value flows through `LlamaAttention` → `get_rope(max_position=...)` (`vllm/model_executor/models/llama.py:266, 243–245`), so the draft's `cos_sin_cache` has exactly 2048 rows (`vllm/model_executor/layers/rotary_embedding/base.py:97`).
 > 3. The crash is the gather `cos_sin_cache.index_select(0, positions)` (`base.py:173`). Under compilation Inductor emits a Triton bounds assert — hence the exact `< 2048` message the moment any draft position reaches 2048. This is fully decoupled from `--max-num-batched-tokens`, which is why raising it never helped.
-> 4. `--enforce-eager` only *hides* the bug: with compilation mode NONE the custom-ops default resolves to `'all'` (`vllm/config/vllm.py` `__post_init__`; visible in our eager server log as `custom_ops': ['all']`), so `RotaryEmbedding` dispatches to `forward_cuda`, whose position gather is unchecked pointer arithmetic (`csrc/libtorch_stable/pos_encoding_kernels.cu:92-93`) — an out-of-bounds *read* for every draft position ≥ 2048. Undefined behavior worth fixing on its own. One honest empirical note: in our measurements the OOB reads did not measurably change acceptance — a retest with the draft config's `max_position_embeddings` raised to 8192 and compilation ON gave the same accepted length (tau ≈ 1.14 at ~7.4k-token context) as the eager/stock run, so the low long-context acceptance we observe appears to be a property of the drafter at this context length, not corruption from the OOB reads.
+> 4. `--enforce-eager` only *hides* the bug: with compilation mode NONE the custom-ops default resolves to `'all'` (`vllm/config/vllm.py` `__post_init__`; visible in our eager server log as `custom_ops': ['all']`), so `RotaryEmbedding` dispatches to `forward_cuda`, whose position gather is unchecked pointer arithmetic (`csrc/libtorch_stable/pos_encoding_kernels.cu:92-93`) — a silent out-of-bounds *read* for every draft position ≥ 2048. We instrumented this directly on an A100 (standalone `get_rope(max_position=2048)`, per-position comparison against independent RoPE math, subprocess-isolated): `forward_cuda` returns correct values through position 2047 (max abs err ≤ 4e-5) and **garbage from 2048 on with no error raised** (max abs err ~3e19 at 2048/2049, ~3.4 at 3000–7399), while an 8192-row control cache is correct at every position, and `forward_native` on the same 2048-row cache raises a device-side assert at exactly 2048 — which also proves the eager dispatch by elimination, since real eager serving runs never crash. Two honest empirical notes: (a) the OOB reads did not measurably change end-to-end acceptance in our workload — a retest with the draft config's `max_position_embeddings` raised to 8192 and compilation ON reproduced the same accepted length (tau ≈ 1.14 at ~7.4k-token context, 4/4 cells) as the eager/stock runs, so for this drafter the low long-context acceptance is a drafter property, not OOB corruption; (b) that makes the OOB read no less worth fixing — it is undefined behavior whose blast radius depends on allocator layout, not on our luck with it.
 > 5. vLLM even computes `draft max_model_len = min(2048, target) = 2048` (`vllm/config/speculative.py:887`), but the v1 runtime never consumes it — the proposer clamps positions with the **target's** `max_model_len` (`vllm/v1/spec_decode/llm_base_proposer.py:79`). So the engine neither sizes the cache correctly nor stops speculating at 2048.
 >
 > This confirms the hypothesis from #21986. Corroborating evidence that the checkpoint value is a training artifact rather than a real limit: sgl-project/SpecForge#249, where editing the draft `config.json` to the target's value restored normal acceptance lengths.
@@ -193,11 +196,28 @@ eager. Resolution, verified against the v0.24.0 tree and our own logs:
   the fixed-checkpoint retest falsified it (tau identical, 1.144 vs
   1.1441). Step 4 and the draft comment now state the measured reality.
 
-**Empirical confirmation pending:** `scripts/debug_rope_oob.py` (subprocess
--isolated GPU probes) instruments the actual object vLLM builds: resolved
-custom_ops + selected forward method, forward_cuda values at positions
-2048..7399 vs an independent math reference (with an 8192-cache control),
-and forward_native's behavior at an OOB position. **Do not post the draft
-comment above until this has run and its output is folded in** — the
-comment's dispatch sentence is source-verified, but the "what the OOB read
-returns" characterization should quote observed values, not inference.
+### Instrumentation results (2026-07-18, A100-40GB — DISPUTE CLOSED)
+
+`scripts/debug_rope_oob.py` ran on the real GPU (each probe in its own
+subprocess). Verified against the notebook output, not summarized:
+
+- **control** (8192-row cache, correct sizing): CORRECT at every tested
+  position including 2048/2049/3000/4096/7399 (max_abs_err ≤ 8.4e-5) —
+  the methodology itself is sound.
+- **cuda** (2048-row cache = the stock checkpoint): CORRECT through 2047
+  (≤ 4.1e-5), then **GARBAGE with no error raised**: max_abs_err
+  3.1e19 @ 2048, 5.0e19 @ 2049, then ~3.20–3.41 absolute at
+  3000/4096/7399. Direct observation of the silent OOB read.
+- **native** (the checked path): CORRECT at 2047, **RAISED a device-side
+  assert at exactly 2048** — the compiled-mode crash signature. Since
+  real eager runs never crashed, this excludes `forward_native` and
+  proves the `forward_cuda` dispatch by elimination, independently of the
+  source/log analysis above.
+- **dispatch** probe errored on a script bug (`CustomOp.enabled()` needs
+  an active `set_current_vllm_config` context; fixed 2026-07-18). Its
+  "resolves to None / dispatches to: None" line in the original output is
+  a meaningless artifact of that crash — never quote it. The probe is no
+  longer load-bearing: cuda+native together settle dispatch.
+
+**Hold lifted: the draft comment below is finalized with these observed
+values and is ready for the user to post.**

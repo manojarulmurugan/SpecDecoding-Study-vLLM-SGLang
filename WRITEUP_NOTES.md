@@ -166,3 +166,30 @@ cell added to the retest notebook) will characterize the actual OOB values; the 
 is on hold until it runs. Write-up moral, worth a paragraph: a mechanistically plausible,
 source-cited prediction ("garbage rotations → degraded acceptance") still failed measurement —
 cite-and-verify beats cite-and-infer even when the source reading is correct.
+
+---
+
+## Dispute closed with direct GPU instrumentation — final numbers (2026-07-18)
+
+The eager-mode RoPE question is now settled empirically, not by source-reading
+(`scripts/debug_rope_oob.py`, subprocess-isolated probes on the A100; full output in the
+τ-retest notebook):
+- 2048-row cache (stock checkpoint), `forward_cuda`: CORRECT ≤ 2047 (err ≤ 4e-5), then
+  **silent GARBAGE** — err ~3e19 at positions 2048/2049, ~3.4 at 3000–7399. No error raised.
+- 8192-row control cache: CORRECT at every position (≤ 8.4e-5) — methodology validated.
+- `forward_native`, same 2048-row cache: device-side assert at exactly 2048 — the compiled-mode
+  crash signature, which proves eager's `forward_cuda` dispatch by elimination (eager serving
+  never crashed).
+- 4-cell replication with the fixed checkpoint + compilation ON: tau = 1.1441/1.1441 (c1),
+  1.1388/1.1376 (c8), 0 errors. The long-context acceptance collapse now has 5+ consistent
+  measurements across two independent sessions and survives the strongest falsification attempt.
+- New compiled-regime data point: S+fixed-checkpoint at c8 = 166 tok/s vs compiled no-spec
+  k_stress c8 = 221 tok/s → **x0.75, S counterproductive at long context under compilation
+  too** (caveat: the two servers differ in --max-num-batched-tokens, so cite as supporting,
+  not headline-grade).
+
+Write-up beat this hands us, fully evidenced end-to-end: one wrong config value produced two
+completely different failure modes from the same root cause — a hard crash under compilation
+(checked gather) and silent garbage under eager (unchecked kernel) — and the garbage happened
+to be harmless only because the drafter was already at its acceptance floor. Diagnosed to
+file:line, instrumented per-position on hardware, upstreamed (#48894 + finalized comment).

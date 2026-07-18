@@ -173,13 +173,28 @@ dispatches RotaryEmbedding to the unchecked CUDA kernel
 What the challenge DID catch: the "OOB reads should degrade acceptance"
 prediction was falsified by the retest (tau identical) — diagnosis §4 and
 the draft GitHub comment are corrected accordingly (appendix in
-analysis/vllm_2048_bug_diagnosis.md). **Draft comment is ON HOLD** until
-`scripts/debug_rope_oob.py` (subprocess-isolated GPU probes; cell added to
-the τ-retest notebook after its sweep cell) reports the actually-observed
-OOB values. Still pending from that same session: the 4-cell replication
-sweep (cells 11-12 of the retest notebook have never executed; the results
-dir in the repo is EMPTY — the single-cell tau=1.144 lives only in
-notebook cell-12 output per the note above).
+analysis/vllm_2048_bug_diagnosis.md).
+
+**Dispute thread CLOSED (2026-07-18): GPU instrumentation + 4-cell
+replication both ran and confirmed everything.** Instrumentation
+(`scripts/debug_rope_oob.py` on the A100): forward_cuda on the 2048-row
+cache is CORRECT through position 2047 then returns GARBAGE silently
+(err ~3e19 at 2048/2049, ~3.4 at 3000-7399); the 8192-row control is
+correct everywhere; forward_native RAISES the device assert at exactly
+2048 — proving forward_cuda dispatch by elimination (real eager runs
+never crashed). The dispatch probe itself hit a script bug
+(CustomOp.enabled() needs an active vLLM-config context — FIXED
+2026-07-18; its "None/None" verdict line in the original output is a
+meaningless artifact, never quote it). 4-cell replication (records in
+phase3c_retest_results_full/, verified): 4/4 ok, tau = 1.1441/1.1441
+(c1) and 1.1388/1.1376 (c8) with the FIXED checkpoint + compilation on —
+the long-context tau collapse now rests on 5+ consistent measurements
+across two independent sessions. Bonus like-for-like point: compiled
+S+fixed at c8 = 166 tok/s vs compiled no-spec k_stress c8 = 221 tok/s
+(x0.75) — S counterproductive at long context in the COMPILED regime
+too, not only eager (small caveat: batched-tokens flag differs between
+those two servers). **Diagnosis + draft comment FINALIZED with the
+observed numbers; hold lifted — user posts the comment to #48894.**
 
 Phase 5 progress: `analysis/stack_advisor.py` BUILT (scenario CLI with
 per-recommendation provenance + `--validate`, which recomputes every

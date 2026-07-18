@@ -95,10 +95,12 @@ FINDINGS: Dict[str, Dict[str, str]] = {
                  "fixed (max_position_embeddings 2048->8192, compilation "
                  "ON) tau is unchanged at 1.144 -- a drafter property on "
                  "long unique documents, independent of the crash bug "
-                 "(analysis/vllm_2048_bug_diagnosis.md). 4-cell "
-                 "replication pending for full statistical footing",
-        "source": "phase3c diagnostics + k_stress KS-probe + tau-retest "
-                  "(notebook cell output; records pending)"},
+                 "(analysis/vllm_2048_bug_diagnosis.md). 4-cell replication "
+                 "DONE: 4/4 ok, tau 1.1441/1.1441 (c1), 1.1388/1.1376 "
+                 "(c8) -- 5+ consistent measurements across two "
+                 "independent sessions",
+        "source": "phase3c diagnostics + k_stress KS-probe + "
+                  "phase3c_retest_results_full/"},
     "QUAL-S": {
         "claim": "EAGLE-3 under greedy decoding is quality-free (measured "
                  "bit-identical accuracy spec-on vs spec-off; theoretical "
