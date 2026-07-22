@@ -1,0 +1,25 @@
+{
+  "pr_head": "f5a7f2eda",
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "n_requests": 8,
+  "prompt_token_lengths": [
+    7435,
+    7435,
+    7438,
+    7438,
+    7435,
+    7435,
+    7435,
+    7436
+  ],
+  "wall_s": 54.5,
+  "override_line": "(APIServer pid=2805) INFO 07-22 10:40:28 [speculative.py:1167] Overriding draft model max_position_embeddings from 2048 to the target model's max_model_len (8192); EAGLE drafts share the target's positional space.",
+  "crash_lines": [],
+  "spec_stats": {
+    "num_drafts": 1782.0,
+    "num_draft_tokens": 8910.0,
+    "num_accepted_tokens": 258.0,
+    "acceptance_rate": 0.028956228956228958,
+    "accepted_length_tau": 1.144781144781145
+  }
+}

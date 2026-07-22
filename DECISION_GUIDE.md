@@ -3,10 +3,9 @@
 Prose distillation of this project's measured findings into deployment advice. Every
 recommendation cites the finding behind it (bracketed IDs, resolved in the
 [Provenance](#provenance) section), and the [last section](#where-the-data-stops) says
-where the data stops. The same rules exist as an executable CLI —
-`python3 -m analysis.stack_advisor` — whose `--validate` mode recomputes every
-quantitative claim below from the raw run records (11/11 checks pass against the
-committed results).
+where the data stops. Every quantitative claim below is recomputable from the committed
+raw per-run records under `*_results/runs/` and the analysis reports built from them —
+the provenance table links each finding to its source.
 
 **The three levers**, as vLLM 0.24.0 flags on Llama-3.1-8B-Instruct:
 
@@ -29,9 +28,9 @@ you are extrapolating — see [Where the data stops](#where-the-data-stops).
 |---|---|---|
 | Short context, low concurrency (1–8), quality-tolerant | **W + S** (leave K off) | x3.0 GSM8K/RAG, x5.2 HumanEval at conc 1 — the best measured stack in the study [P2-W-c1, P2-S-c1, F3-KS] |
 | Short context, low concurrency, quality-sensitive | **S only** | x1.9–3.2, bit-identical output under greedy [P2-S-c1, QUAL-S] |
-| Short context, high concurrency (32+), no KV pressure | **Nothing** (code workloads: keep S) | W and S both fade to ~x1.0 or below by conc 64; HumanEval's S holds x1.37 [P2-S-cross, F3-W-rev] |
+| Short context, high concurrency (32+), no KV pressure | **Nothing** (code workloads: keep S) | W and S both fade to ~x1.0 by conc 64 (no speed left to buy); HumanEval's S holds x1.37 [P2-S-cross, P2-W-c1] |
 | High concurrency **with** KV-capacity pressure | **K** (+ W if quality-tolerant) | K doubles the admitted batch, +19% goodput, −21% TTFT p95; W raises the admission ceiling ~17→~27 [3b-K-cap, 3b-W-cap] |
-| Long context (~4k+ tokens per request) | **Turn S off**; K is ~neutral; W if quality-tolerant | S is a measured net *loss* at 7.4k context: x0.89–0.94 [D2-S-long] |
+| Long context (measured at 7.4k tokens) | **Turn S off**; K is ~neutral; W if quality-tolerant | S is a measured net *loss* at 7.4k context: x0.89–0.94 [D2-S-long] |
 | Quality-sensitive, any regime | **Never W**; K and S are ~free | W is the only lever with a measured accuracy price: −3 to −8 pts [QUAL-W, QUAL-K, QUAL-S] |
 
 **Three stacking rules that always apply:**
@@ -54,7 +53,7 @@ you are extrapolating — see [Where the data stops](#where-the-data-stops).
 
 | | Best case (measured) | Worst case (measured) | Quality price | One-line mechanism |
 |---|---|---|---|---|
-| **W** (AWQ W4A16) | x1.70–2.13 at conc 1–8 [P2-W-c1] | x0.90–0.92 at conc 64, GSM8K/RAG [F3-W-rev] | **−3 to −4 pts GSM8K, −6 to −8 pts HumanEval** [QUAL-W] | Quarters weight bytes; wins while decode is bandwidth-bound, becomes dequant overhead when compute-bound |
+| **W** (AWQ W4A16) | x1.70–2.13 at conc 1–8 [P2-W-c1] | ≈x1.0 solo at conc 64; x0.90–0.92 as a factorial main effect (i.e. stacked) [P2-W-c1, F3-W-rev] | **−3 to −4 pts GSM8K, −6 to −8 pts HumanEval** [QUAL-W] | Quarters weight bytes; wins while decode is bandwidth-bound, neutralizes when compute-bound |
 | **K** (FP8 KV) | x1.17–1.19 + 2x admitted batch at capacity [3b-K-cap] | x0.63 under S at low concurrency [F3-KS] | ~0 (slightly *positive* on HumanEval) [QUAL-K] | Halves KV bytes; pays a ~5% emulation tax on A100 until KV capacity is the binding constraint |
 | **S** (EAGLE-3) | x1.90–3.16 at conc 1, short context [P2-S-c1] | x0.89–0.94 at 7.4k-token context — a net loss [D2-S-long] | ~0 under greedy (bit-identical, measured) [QUAL-S] | Drafts tokens with a small head; wins while acceptance is high and spare compute exists, loses when either goes |
 
@@ -62,7 +61,7 @@ you are extrapolating — see [Where the data stops](#where-the-data-stops).
 
 ## Recommendations by scenario
 
-### Short context (≤ ~2k tokens per request), low concurrency (1–8)
+### Short context (measured at ~1k tokens per request), low concurrency (1–8)
 
 This is S's and W's home regime: single-stream decode is memory-bandwidth-bound, so
 quartering weight bytes (W) and amortizing weight reads over speculated tokens (S)
@@ -96,10 +95,11 @@ W and S at low concurrency no longer buy anything.
   concurrency — the erosion is economics (no spare compute to speculate with), not
   acceptance [P2-S-cross]. **Exception — code workloads: keep S.** HumanEval's
   τ≈4.1 keeps S at x1.37 even at conc 64.
-- **W: OFF.** Solo speedup fades to x1.00–1.18 by conc 64 [P2-W-c1], and the
-  factorial's W main effect *reverses* to x0.90–0.92 on GSM8K/RAG — Marlin dequant
-  overhead in a compute-bound regime is a net loss [F3-W-rev]. You'd be paying
-  −3 to −8 accuracy points for nothing [QUAL-W].
+- **W: OFF.** W-alone is neutral here — its solo speedup fades to x1.00–1.18 by conc 64
+  [P2-W-c1], so there is simply no speed left to buy. (The factorial's W *main effect*
+  dips to x0.90–0.92 on GSM8K/RAG, but that averages over the S-on/K-on stacks, so it's
+  interaction bleed-through, not evidence that toggling W alone slows you down
+  [F3-W-rev].) Either way you'd be paying −3 to −8 accuracy points for nothing [QUAL-W].
 - **K: OFF.** Still just the emulation tax if capacity isn't binding [P2-K-tax].
 
 ### High concurrency at KV-capacity pressure (the regime where K earns its keep)
@@ -116,14 +116,20 @@ admitted requests):
 - **W: ON if quality-tolerant — as a *capacity* lever, not a speed lever.** AWQ
   frees ~10.4GB of weights, growing the KV pool so the admission ceiling rises
   ~17 → ~27 at the same KV dtype (measured plateau vs. predicted ~26) [3b-W-cap].
-  Its throughput ratio stays ~x1.0; what you're buying is admitted requests.
+  Its throughput ratio stays ~x1.0; what you're buying is headroom. (The W-arm
+  evidence here is the batch ceiling and fewer preemptions — 2 vs 10 at conc 32 —
+  rather than the full TTFT/queue table measured for K; W's capacity channel is
+  clearest as a raised admission plateau.)
 - **W + K stack cleanly here**: freed weight memory and cheaper KV bytes attack the
   same pool from both sides (measured max batch 41.8 at conc 48 with both on).
 - **S: only if context is short** — see the next section if it isn't.
 
-### Long context (~4k+ tokens per request)
+### Long context (measured at 7.4k tokens per request)
 
-The study's sharpest negative result lives here.
+The study's sharpest negative result lives here. **Note the context axis has only two
+measured points — ~1k (healthy) and ~7.4k (collapsed); the onset between them is not
+pinned** (see [Where the data stops](#where-the-data-stops)), so treat "long" as
+"materially above ~1k, approaching several thousand tokens," not a sharp 4k line.
 
 - **S: OFF.** At 7.4k-token RAG contexts EAGLE-3 is measurably **counterproductive**:
   x0.94 at conc 1, x0.89 at conc 8 against a no-spec baseline in the same regime.
@@ -131,9 +137,12 @@ The study's sharpest negative result lives here.
   1.14 — with 5 draft tokens per round, ~77% of draft compute is discarded
   [D2-S-long]. This is a *drafter* property (out-of-distribution on long unique
   documents), not an engine artifact: it survived a fixed-checkpoint retest with
-  compilation on, replicated 4/4 with τ = 1.138–1.144, and holds in both eager and
-  compiled regimes (x0.75 supporting point, compiled). A drafter trained on
-  long-context data could change this verdict; this checkpoint doesn't.
+  compilation on, replicated 4/4 with τ = 1.138–1.144. A drafter trained on
+  long-context data could change this verdict; this checkpoint doesn't. (The
+  long-context *and* high-concurrency corner specifically is two measured trends
+  pointed the same way, not one directly-measured cell: the cleanest compiled
+  long-context point, x0.75 at conc 8, carries a `--max-num-batched-tokens` difference
+  vs. its baseline, so cite it as supporting, not headline-grade.)
 - **K: ~neutral on speed, unmeasured on quality.** At 7.4k context below the
   capacity knee K is ~x1.01 — the growing KV read stream earns back the emulation
   tax [3b-K-long]. But note: K's ~zero *accuracy* cost is measured at short context
@@ -153,11 +162,13 @@ asymmetry is stark [QUAL-W, QUAL-K, QUAL-S]:
 - **W is not free** — −3 to −4 pts GSM8K, −6 to −8 pts HumanEval, every concurrency.
 
 So: **reach for S and K first; W buys the most speed at low concurrency, but it is
-the only lever you pay for in correctness.** One replicated curiosity: FP8-KV claws
-back +1.7 to +3.5 points of W's HumanEval damage (WK interaction positive in all
-4 concurrency cells) — mechanism unresolved (KV rounding vs. the attention-backend
-switch that rides along with K), so treat it as an observed offset, not a promise
-[QUAL-WK].
+the only lever you pay for in correctness.** One curiosity, deliberately underweighted:
+FP8-KV appears to claw back +1.7 to +3.5 points of W's HumanEval damage (WK interaction
+positive in all four concurrency cells). Treat it as suggestive, not a rule — each cell
+is only 64 questions, so this is a handful of problems flipping, and under greedy
+decoding the four cells re-score largely the same items rather than being four
+independent replications. Mechanism unresolved (KV rounding vs. the attention-backend
+switch that rides along with K) [QUAL-WK].
 
 ### Native-FP8 GPUs (H100 and newer) — extrapolation, clearly labeled
 
@@ -172,12 +183,13 @@ directly, since it's about bytes, not throughput.
 
 ## Why: the mechanisms in plain language
 
-**Why W fades and then reverses.** Low-batch decode is memory-bandwidth-bound —
+**Why W fades with concurrency.** Low-batch decode is memory-bandwidth-bound —
 each generated token requires streaming all the weights through the GPU, so
 quartering weight bytes nearly doubles speed. As the batch grows, the same weight
 read is amortized over more tokens and the GPU becomes compute-bound; W's bandwidth
-win vanishes (~x1.0 at conc 64) and its dequantization overhead turns it into a
-small net loss on some workloads (x0.90–0.92) [P2-W-c1, F3-W-rev].
+win vanishes to ~x1.0 at conc 64 [P2-W-c1]. (Stacked with S, W's dequantization
+overhead can tip the *main effect* slightly negative — x0.90–0.92 — but toggling W
+alone stays neutral, not harmful [F3-W-rev].)
 
 **Why K is a tax until it's a doubler.** FP8-KV halves KV-cache bytes. Below
 capacity, on an A100, you pay ~5% for emulated FP8 arithmetic and the halved bytes
@@ -229,19 +241,21 @@ quantized [F3-WS, F3-KS].
 
 ## Provenance
 
-Every bracketed ID above is a finding with a claim and a committed data source.
-`python3 -m analysis.stack_advisor --list-findings` prints the same table;
-`--validate` recomputes the quantitative claims from the raw per-run JSON records:
+Every bracketed ID above is a finding with a claim and a committed data source. Each
+row's claim is recomputable from the raw per-run JSON records in that source's
+`runs/` directory (the analysis reports listed below are themselves generated from
+those records). To re-derive the headline numbers and PASS/FAIL each against the range
+this guide asserts:
 
 ```
-python3 -m analysis.stack_advisor --validate phase3_results phase3b_results phase3c_diagnostics_results
+python3 -m analysis.validate_claims phase3_results phase3b_results phase3c_diagnostics_results
 # 337 records -> 11/11 PASS
 ```
 
 | ID | Finding (short form) | Source |
 |---|---|---|
 | P2-W-c1 | W solo x1.70–2.13 at conc 1–8, fading to ~x1.0 by conc 64 | [phase2_marginals_report.md](phase2_results/phase2_marginals_report.md) |
-| F3-W-rev | W main effect reverses at conc 64 (x0.90–0.92, GSM8K/RAG) | [factorial_report.md](phase3_results/factorial_report.md) |
+| F3-W-rev | W *main effect* (stacked) dips to x0.90–0.92 at conc 64, GSM8K/RAG; W-alone stays ≈x1.0 [P2-W-c1] | [factorial_report.md](phase3_results/factorial_report.md) |
 | 3b-W-cap | AWQ raises the admission ceiling ~17 → ~27 at 7.7k contexts | [k_stress_report.md](phase3b_results/k_stress_report.md) |
 | P2-K-tax | K solo x0.94–0.98 below the capacity knee (A100 emulation tax) | [phase2_marginals_report.md](phase2_results/phase2_marginals_report.md) |
 | 3b-K-cap | K doubles admitted batch at capacity; +17–19% goodput, TTFT p95 −21% | [k_stress_report.md](phase3b_results/k_stress_report.md) |
@@ -267,6 +281,10 @@ it, you're extrapolating:
 
 - **One model, one size**: Llama-3.1-8B-Instruct. Larger models shift the
   weight-bytes/KV-bytes ratio that drives W's and K's economics.
+- **The context axis has two measured points** (~1k and ~7.4k). The S acceptance
+  cliff is real at 7.4k, but *where* between 1k and 7.4k it sets in is unmeasured —
+  the "long context" thresholds in this guide are descriptive, not a measured onset.
+  One ~3–4k-token cell would pin it; see [FUTURE_WORK.md](FUTURE_WORK.md).
 - **One engine version**: vLLM 0.24.0, pinned. Two real engine bugs were found at
   this version (documented in [analysis/vllm_2048_bug_diagnosis.md](analysis/vllm_2048_bug_diagnosis.md),
   reported upstream as [vllm#48894](https://github.com/vllm-project/vllm/issues/48894));

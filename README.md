@@ -9,14 +9,15 @@ Practitioner guidance says these optimizations compound; this project measured w
 actually happens: **speedups interfere (up to x2.97 below the naive product), quality
 costs add cleanly, and every pairwise interaction is negative.**
 
-![tests](https://img.shields.io/badge/tests-177%20passing%20(no%20GPU%20needed)-brightgreen)
+![tests](https://img.shields.io/badge/tests-167%20passing%20(no%20GPU%20needed)-brightgreen)
 ![runs](https://img.shields.io/badge/measured%20serving%20runs-397-blue)
-![validation](https://img.shields.io/badge/advisor%20claims%20validated-11%2F11-brightgreen)
 ![engine](https://img.shields.io/badge/vLLM-0.24.0%20(pinned)-informational)
 ![hardware](https://img.shields.io/badge/GPU-A100%20(Colab)-orange)
 
 **Status: complete.** All experimental phases done and verified · [decision guide](DECISION_GUIDE.md) ·
-upstream bug found, diagnosed to file:line, and [reported](https://github.com/vllm-project/vllm/issues/48894).
+upstream bug found, diagnosed to file:line, [reported](https://github.com/vllm-project/vllm/issues/48894),
+and a maintainer's fix independently validated on hardware
+([PR #49343](https://github.com/vllm-project/vllm/pull/49343), open).
 
 ---
 
@@ -39,8 +40,9 @@ upstream bug found, diagnosed to file:line, and [reported](https://github.com/vl
    you can predict the stack's accuracy from the levers' report cards, never its speed.
 3. **The three levers price quality completely differently.** W4A16 costs −3 to −8
    accuracy points (the only lever with a real quality price); FP8-KV costs ~0;
-   EAGLE-3 under greedy decoding is measured bit-identical. Bonus replicated oddity:
-   FP8-KV *claws back* +1.7 to +3.5 points of W4A16's HumanEval damage.
+   EAGLE-3 under greedy decoding is measured bit-identical. So quality-sensitive
+   deployments should reach for K and S first and treat W as the lever you pay for
+   in correctness.
 4. **Speculative decoding has a context-length cliff.** EAGLE-3's acceptance collapses
    from τ≈2.85 to τ≈1.14 at 7.4k-token contexts, making it a measured net **loss**
    (x0.89–0.94) — confirmed drafter-real by 5+ measurements across two sessions,
@@ -52,7 +54,11 @@ upstream bug found, diagnosed to file:line, and [reported](https://github.com/vl
    checkpoint's `max_position_embeddings=2048` sizes the draft RoPE cache; long prompts
    crash compiled mode and silently read out-of-bounds in eager mode. Diagnosed to
    file:line, GPU-instrumented per-position, reported upstream
-   ([vllm#48894](https://github.com/vllm-project/vllm/issues/48894)).
+   ([vllm#48894](https://github.com/vllm-project/vllm/issues/48894)). A maintainer
+   opened a fix ([PR #49343](https://github.com/vllm-project/vllm/pull/49343), open,
+   unmerged as of this writing); we independently validated it on an A100 against the
+   original repro — confirmed pass (tau=1.1448, matching our earlier manual-workaround
+   validation) and confirmed control (crash returns identically with the fix reverted).
 
 **The practical distillation of all of this is [DECISION_GUIDE.md](DECISION_GUIDE.md)**
 — which optimization to enable for your context length, concurrency, and quality
@@ -62,33 +68,33 @@ tolerance, with the measured finding behind every rule.
 
 ## The runnable artifacts
 
-This repo is a study, but it ships four things you can run or reuse today:
+This repo is a study, but it ships three things you can run or reuse today:
 
 1. **[The decision guide](DECISION_GUIDE.md)** — deployment recommendations per
    scenario, each citing the measured cells behind it and stating where the data stops.
-2. **`stack-advisor`** — the same guide as an executable CLI. Give it your deployment
-   scenario; it recommends a stack with expected effect ranges and provenance. Its
-   `--validate` mode recomputes every quantitative claim from the raw run records —
-   the guide cannot silently drift from the data:
+   Every quantitative claim in it is recomputable from the committed raw per-run
+   records; `analysis/validate_claims.py` re-derives the headline numbers and
+   PASS/FAILs each against the range the guide asserts:
    ```bash
-   python3 -m analysis.stack_advisor --context-tokens 7400 --concurrency 48
-   python3 -m analysis.stack_advisor --context-tokens 512 --concurrency 1 --workload code --quality-sensitive
-   python3 -m analysis.stack_advisor --validate phase3_results phase3b_results phase3c_diagnostics_results
+   python3 -m analysis.validate_claims phase3_results phase3b_results phase3c_diagnostics_results
    # -> 337 records, 11/11 PASS
    ```
-3. **The benchmark harness** (`harness/`) — a reusable, engine-agnostic serving
-   benchmark: generated configs (never hand-edited YAML), resumable sweeps with
-   server-launch amortization, process-group-safe engine lifecycle (survives vLLM V1's
-   multi-process EngineCore), a two-signal launch watchdog that doesn't false-kill
-   cold model downloads, per-run atomic JSON records with full environment capture,
-   and a fake-server test suite — **177 tests, all runnable with no GPU**
-   (`python3 -m pytest tests -q`).
-4. **An upstream bug report** with a full source-level diagnosis:
+2. **The benchmark harness** (`harness/`) — a reusable, engine-agnostic serving
+   benchmark, and the piece with the most reuse value here: generated configs (never
+   hand-edited YAML), resumable sweeps with server-launch amortization,
+   process-group-safe engine lifecycle (survives vLLM V1's multi-process EngineCore),
+   a two-signal launch watchdog that doesn't false-kill cold model downloads, per-run
+   atomic JSON records with full environment capture, and a fake-server test suite —
+   **167 tests, all runnable with no GPU** (`python3 -m pytest tests -q`). Point it at
+   your own model/GPU to measure *your* interference structure with the same rigor.
+3. **An upstream bug report** with a full source-level diagnosis:
    [vllm-project/vllm#48894](https://github.com/vllm-project/vllm/issues/48894) and
    [analysis/vllm_2048_bug_diagnosis.md](analysis/vllm_2048_bug_diagnosis.md) — one
    wrong checkpoint config value producing two different failure modes (hard crash
    under compilation, silent out-of-bounds reads under eager), separated cleanly from
-   a real performance finding that initially looked like its symptom.
+   a real performance finding that initially looked like its symptom. A maintainer's
+   proposed fix ([PR #49343](https://github.com/vllm-project/vllm/pull/49343)) has
+   since been independently validated against the original repro on an A100.
 
 ---
 
@@ -146,7 +152,10 @@ Single-lever goodput ratios vs. the FP16/FP16-KV/no-spec baseline
 The best measured stack is **W+S at low concurrency**: x3.01 (GSM8K), x5.23
 (HumanEval), x2.98 (RAG) at conc 1 — against a naive-product prediction of x4.4–6.7.
 Adding K (the "full stack") cuts it roughly in half on A100: x1.40 / x2.28 / x1.38.
-Every pairwise interaction in the factorial is negative
+At the other end of the sweep the interference is severe enough to invert the point of
+stacking: the full W+K+S stack on GSM8K at concurrency 64 measures **x0.71 — slower
+than running no optimization at all.** Every pairwise interaction in the factorial is
+negative
 ([full effects](phase3_results/factorial_report.md)); the WS erosion reproduces
 SpecMQuant's finding under batching (and adds: it is *flat-to-shrinking* in
 concurrency, falsifying the "amplified under batching" hypothesis), and the KS erosion
@@ -164,9 +173,13 @@ From the computed 2³ accuracy contrasts
 | S (EAGLE-3, greedy) | ~0 (bit-identical) | ~0 (bit-identical) |
 
 Quality does not compound: the full stack's loss ≈ W's loss alone, in every cell.
-The WK interaction is *positive* on HumanEval (+1.7 to +3.5 pts, all four
-concurrencies) — FP8-KV partially offsets W4A16's damage; mechanism unresolved and
-honestly labeled as such.
+A smaller, honestly-hedged observation: the WK interaction is *positive* on HumanEval
+(+1.7 to +3.5 pts across the four concurrency cells) — FP8-KV appears to partially
+offset W4A16's code-accuracy damage. Treat this as suggestive, not a headline: each
+cell is 64 questions, so the effect is a handful of problems flipping, and under
+greedy decoding the four cells re-score largely the same items rather than being four
+independent replications. Mechanism unresolved (KV rounding vs. the attention-backend
+switch that accompanies K).
 
 ### The long-context cliff
 
@@ -225,14 +238,15 @@ ledger, corrections recorded as corrections):
 ```
 DECISION_GUIDE.md          The deliverable: measured deployment advice, with provenance
 analysis/
-  stack_advisor.py         The guide as a CLI (+ --validate against raw records)
   factorial.py             Log-space 2^3 effect estimation + interference gap
   quality_factorial.py     The same contrasts on the accuracy axis
+  validate_claims.py       Recompute the guide's headline numbers from raw records
   marginals.py, k_stress.py, repro_gate.py
   vllm_2048_bug_diagnosis.md
+FUTURE_WORK.md             Deferred extensions, and ideas that didn't make the cut
 harness/                   Engine-agnostic serving benchmark (launch, load, sweep, records)
 configs/                   GENERATED configs — edit the generate_*.py, never the YAML
-tests/                     177 GPU-free tests (fake vLLM server included)
+tests/                     165 GPU-free tests (fake vLLM server included)
 colab/                     The GPU-session notebooks (numbered by phase) + debug archives
 block0_results/            Reproduction gate (8 runs)     -> repro_gate_report.md
 phase2_results/            Marginals (48 runs)            -> phase2_marginals_report.md
@@ -256,8 +270,8 @@ KV-quant × prefix-cache-capacity seam in RAG serving) was scoped with pre-regis
 kill criteria and is out of the shipped core.
 
 **Guiding principle throughout:** every claim must earn its place mechanistically, and
-every number must be recomputable from committed records — which is what
-`stack_advisor --validate` enforces.
+every number in the decision guide traces to a committed per-run record — the raw
+`*_results/runs/*.json` files and the analysis reports built from them.
 
 ---
 

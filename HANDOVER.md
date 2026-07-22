@@ -196,31 +196,48 @@ too, not only eager (small caveat: batched-tokens flag differs between
 those two servers). **Diagnosis + draft comment FINALIZED with the
 observed numbers; hold lifted — user posts the comment to #48894.**
 
-Phase 5 progress: `analysis/stack_advisor.py` BUILT (scenario CLI with
-per-recommendation provenance + `--validate`, which recomputes every
-quantitative claim from raw records: 11/11 PASS against the 337 records on
-disk); quality-side factorial BUILT (`analysis/quality_factorial.py`,
-computed 2^3 accuracy contrasts -> phase3_results/quality_effects.json;
-headline: quality does NOT compound, |excess| <= 0.7 pts in all 8 cells; W
-main -3/-4 pts GSM8K and -6/-8 pts HumanEval; NEW ROBUST FINDING: WK
-interaction POSITIVE on HumanEval +1.7..+3.5 pts in all 4 cells — FP8-KV
-partially offsets W4A16's quality damage, mechanism unresolved). Remaining
-Phase 5: write-up series. Phase 4 (SGLang RAG seam) still optional/open.
+## PROJECT CLOSED OUT (2026-07-20) — "complete as of now"
 
-**DECISION_GUIDE.md + README rewrite DRAFTED (2026-07-18), awaiting user
-review before the write-up series.** DECISION_GUIDE.md is the prose
-distillation of stack_advisor (scenario tables, plain-language mechanisms,
-same finding IDs as the CLI, provenance table linking each ID to its
-committed report, honest where-the-data-stops section). README.md rewritten
-portfolio-ready: pitch + badges (177 tests — count verified by running the
-suite; 397 measured runs = 8+48+288+40+9+4 counted on disk; 11/11 validate
-re-run and passing), headline findings, results-in-depth tables (numbers
-pulled from the committed phase reports, not memory), three debugging
-stories, repo map, scope, reading order; all prereq-check/scaffolding
-sections cut (PREREQ_RESULTS.md remains the source of truth). New measured
-number surfaced for the guide, computed from phase3_results/runs: the W+S
-pair at conc 1 = x3.01 GSM8K / x5.23 HumanEval / x2.98 RAG (best measured
-stack in the study; full WKS = x1.40/2.28/1.38 — K halves it on A100).
+The study is marked complete for marketing (resume/website/write-up series).
+Parallel open thread: user posts the finalized comment on vllm#48894 and
+pursues acknowledgment/merge — the ONLY active work item.
+
+**stack_advisor.py REMOVED (2026-07-20), by user decision.** The advisor
+CLI (recommendation engine + `--validate`) was cut as a gimmick: it was a
+lookup table over a fixed experiment wearing a CLI costume, and a general
+live/scenario advisor would have to overclaim outside the measured envelope
+(one model, one GPU family, greedy, two context points) — undercutting the
+project's rigor, which is its actual asset. Full reasoning + the honest
+"if revisited" framing is in FUTURE_WORK.md. The recommendation engine lives in
+git history if a better-scoped iteration wants it; the `--validate`
+recompute-from-records logic was EXTRACTED to `analysis/validate_claims.py`
+(2026-07-20, still 11/11 PASS) + `tests/test_validate_claims.py`.
+`tests/test_stack_advisor.py` removed; suite now **167 tests** (12 advisor
+tests dropped, 2 validate tests added; was 177). Reproducibility is preserved at the data level: every guide claim
+traces to committed `*_results/runs/*.json` + the analysis reports.
+
+**DECISION_GUIDE.md + README.md FINALIZED (2026-07-20).** Both rewritten to
+remove all advisor/CLI framing (guide is now prose-backed-by-records; README
+runnable-artifacts down to three: guide, harness, bug report). Folded in the
+five accuracy corrections from the Fable/Sonnet review: (1) context-cliff
+onset relabeled interpolated/unmeasured (axis has only ~1k and ~7.4k points);
+(2) "W reverses to a net loss at high conc" corrected — W-alone is ~x1.0
+neutral at conc 64; the x0.90-0.92 is the factorial MAIN effect (stacking
+bleed-through), now distinguished everywhere; (3) WK quality-offset DEMOTED
+from a README headline to a hedged aside with the n=64 / greedy-re-scoring
+caveat; (4) W capacity-ceiling claim softened to match shown evidence (batch
+ceiling + preemptions 2-vs-10, not the full TTFT/queue table K has);
+(5) long-context+high-conc "S off" footnoted as two-measured-trends-combined,
+x0.75 carries a --max-num-batched-tokens confound. Also surfaced the GSM8K
+conc-64 full-stack x0.71 (slower than baseline) as a README callout.
+FUTURE_WORK.md created (deferred extensions + the cut advisor + the config-
+linter idea + the cheap context-cliff cell; H100 native-FP8 flagged as the
+highest-leverage follow-up).
+
+quality-side factorial (`analysis/quality_factorial.py`, retained): quality
+does NOT compound, |excess| <= 0.7 pts in all 8 cells; W main -3/-4 pts GSM8K
+and -6/-8 pts HumanEval. Phase 4 (SGLang RAG seam) optional/open in
+FUTURE_WORK. Remaining: write-up series (raw material in WRITEUP_NOTES.md).
 
 **Decision-guide requirement (2026-07-15, verified against phase3_results/runs/):
 the three levers do NOT cost the same thing on the quality axis — this must be
@@ -240,3 +257,47 @@ always null, not a gap):
 The guide's recommendations should reflect this asymmetry explicitly (e.g.
 "reach for K and S first if quality risk matters; W buys more but you pay for
 it in correctness") rather than ranking the three levers on speed alone.
+
+## vllm#48894 follow-up: maintainer's fix validated (2026-07-22)
+
+A vLLM maintainer (Jared Wen, `JaredforReal`) opened
+[PR #49343](https://github.com/vllm-project/vllm/pull/49343) citing our
+issue, implementing the same root-cause fix (raise the EAGLE/EAGLE-3 draft's
+`max_position_embeddings` to the target's `max_model_len`, gated to
+`eagle`/`eagle3`) with a cleaner placement (override before the `EAGLEConfig`
+wrap, so the wrapper inherits the corrected value automatically) than our own
+draft. One narrow gap found on review: checkpoints that load directly *as*
+`EAGLEConfig` (skipping the wrap) leave an inner `.model` copy stale at
+2048 — verified latent, not live (nothing in `vllm/` currently reads that
+inner attribute); `SpeculatorsConfig` is unaffected (flattens to top-level
+attributes, no inner `.model`).
+
+**Independently validated on an A100** (`colab/pr49343_validation_a100.ipynb`,
+raw results in `pr49343_validation_bundle/`): PR head `f5a7f2eda`, same
+repro as the original report (stock draft checkpoint, compiled mode, no
+`--enforce-eager`, ~7.4k-token prompts). Pass: override log line fires,
+zero crashes across 8 requests, tau = 1.1448 (1782 drafts, 258 accepted) —
+statistically identical to our earlier manual-workaround validation
+(tau=1.144). Control (same build, `vllm/config/speculative.py` reverted to
+main): override line absent, original assert returns (96 hits, identical
+signature to #48894).
+
+Posted: a review comment on PR #49343 with the pass/control results and the
+`EAGLEConfig` gap observation (no fix code included, to keep a follow-up PR
+available); a reply in Copilot's review thread correcting its claim that
+eager mode doesn't read out of bounds (our GPU instrumentation shows it
+does — the docstring was right, the reviewer conflated "no crash" with
+"no OOB read"); a closing reply on the original issue pointing Jared to the
+PR review. All three confirmed live via `gh api`.
+
+**Status: PR #49343 open, unmerged, CI has some red checks (mostly
+unrelated-looking suites — multimodal, Whisper, pooling — plausibly a
+`main`-branch or infra issue rather than this diff; `v1-spec-decode` is
+the one worth re-checking once CI reruns).** Next step, gated on merge (not
+before, to avoid competing with an in-flight PR on the same file): file a
+small follow-up PR closing the `EAGLEConfig` gap + adding the two missing
+test cases. That fix, its tests, and the full PR body are already prepared
+in `analysis/vllm_followup_pr_plan.md` — apply against the real post-merge
+`main` (not blindly trust the pre-merge snapshot), `git commit -s` (vLLM
+requires DCO sign-off, confirmed from the maintainer's own commits, not a
+CLA), tag Jared referencing this thread.

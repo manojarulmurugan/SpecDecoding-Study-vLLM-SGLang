@@ -554,3 +554,51 @@ content harder for this draft head), or an artifact to sanity-check once all
    pinned: 220.8 / 220.4 tok/s vs 221 on FLASH_ATTN — the backend switch
    that rides along with every K comparison contributes ~0.2%. The
    project's K effects are genuinely about KV precision.
+
+---
+
+## 2026-07-22 — vLLM PR #49343 (maintainer's fix for #48894) independently validated on GPU
+
+A vLLM maintainer opened PR #49343 citing our issue, implementing the same
+fix we drafted (raise EAGLE/EAGLE-3 draft `max_position_embeddings` to the
+target's `max_model_len`), placed slightly more cleanly (override runs
+before the `EAGLEConfig` wrap, so the wrapper inherits the fixed value
+without a manual double-update). Review turned up one narrow, verified-latent
+gap: checkpoints that load directly *as* `EAGLEConfig` keep a stale inner
+`.model` copy at 2048, since nothing in `vllm/` currently reads it;
+`SpeculatorsConfig` checkpoints are unaffected (flattens config to top-level
+attributes).
+
+Validation notebook: `colab/pr49343_validation_a100.ipynb`
+(A100-SXM4-40GB, PR head `f5a7f2eda`, `VLLM_USE_PRECOMPILED=1 pip install
+-e .`, no rebuild needed since the PR is Python-only). Raw results in
+`pr49343_validation_bundle/` (`partA_fix.log`, `partA_summary.json`,
+`partB_control.log`, `partB_excerpt.txt`):
+
+- **Part A (fix applied):** override log line fires exactly once
+  (`Overriding draft model max_position_embeddings from 2048 to the target
+  model's max_model_len (8192)...`); zero crash-assertion hits, zero
+  `AcceleratorError` hits across the full log; all 8 long-context requests
+  (~7.4k tokens) returned `200 OK`; tau = 1.1448 (1782 drafts, 8910 draft
+  tokens, 258 accepted) — statistically identical to the earlier
+  manual-checkpoint-edit validation (tau=1.144, PREREQ 2026-07-17/18
+  entries), confirming the actual code fix behaves like the known-good
+  workaround.
+- **Part B (control — `vllm/config/speculative.py` reverted to `main`,
+  same build, same prompt):** override line absent (confirms the revert
+  took effect); the original assert returns 96 times, exact same signature
+  (`index out of bounds: 0 <= tl.broadcast_to(tmp10, [XBLOCK]) < 2048`) as
+  the original #48894 report. Crash is attributable to the code change,
+  not environment/version drift.
+
+Posted and confirmed live via `gh api` (2026-07-22): a review comment on
+PR #49343 with the pass/control numbers and the `EAGLEConfig` gap note (no
+fix/test code included — kept for a follow-up PR); a reply inside
+Copilot's review thread correcting its claim that eager mode's docstring
+("silent garbage reads") was unverified — our earlier GPU instrumentation
+(2026-07-18 entry) already measured this directly; a closing reply on
+issue #48894 pointing to the PR review. Status: PR open, unmerged, some
+CI red (broad, likely-unrelated suites — worth re-checking `v1-spec-decode`
+specifically once CI reruns). Follow-up PR (the `EAGLEConfig` gap fix +
+missing test coverage) is prepared in `analysis/vllm_followup_pr_plan.md`,
+gated on this PR merging first.
